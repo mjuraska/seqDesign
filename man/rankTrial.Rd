@@ -1,0 +1,96 @@
+\name{rankTrial}
+\alias{rankTrial}
+\title{
+Ranking and Selection, and Head-to-Head Comparison of Individual and Pooled Treatment Arms
+}
+\description{
+\code{rankTrial} assesses the probability of correctly selecting the winning most efficacious (individual and/or pooled) treatment arm, and assesses power to detect relative treatment efficacy in head-to-head comparisons of (individual and/or pooled) treatment arms.
+}
+\usage{
+rankTrial(censFile, idxHighestVE, headHead = NULL, poolHead = NULL, 
+          lowerVE, stage1, stage2, alpha, saveDir = NULL, 
+          verbose = TRUE)
+}
+\arguments{
+  \item{censFile}{if \code{saveDir = NULL}, a list returned by \code{censTrial}; otherwise a name (character string) of an \code{.RData} file created by \code{censTrial}}
+  \item{idxHighestVE}{an integer value identifying the treatment (vaccine) arm with the true highest VE(0--\code{stage2})}
+  \item{headHead}{a matrix (\code{ncol = 2}) of treatment arm indices for head-to-head comparisons, where the treatment with higher efficacy is listed first in each row}
+  \item{poolHead}{a matrix (\code{ncol} equals 3 or 4) of treatment arm indices for pooled-arm comparisons, where the pooled treatment with higher efficacy pooled over the first two columns is compared with the (pooled) treatment defined by columns 3 and onward. Ranking and selection of pooled arms is performed separately for each row of \code{poolHead}.}
+  \item{lowerVE}{a numeric value defining a `winning' treatment arm as one with sufficient evidence for rejecting the null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \code{lowerVE} x 100\% (typically set equal to 0)}
+  \item{stage1}{the final week of stage 1 in a two-stage trial}
+  \item{stage2}{the final week of stage 2 in a two-stage trial, i.e., the maximum follow-up time} 
+  \item{alpha}{one minus the nominal confidence level of the two-sided confidence interval used for testing a null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \eqn{b} x 100\% against an alternative hypothesis H1: VE(0--\code{stage1}) \eqn{>} \eqn{b} x 100\%}
+  \item{saveDir}{a character string specifying a path for \code{censFile}. If supplied, the output is also saved as an \code{.RData} file in this directory; otherwise the output is returned as a list.}
+  \item{verbose}{a logical value indicating whether information on the output directory and file name should be printed out (default is \code{TRUE})}
+}
+\details{
+All time variables use week as the unit of time. Month is defined as 52/12 weeks.
+
+The probability of correct treatment selection is defined as the probability that the treatment arm with the highest estimated VE(0--\code{stage2}) is the one with the true highest VE(0--\code{stage2}) and, for this treatment arm, the null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \code{lowerVE} x 100\% is rejected. If \code{poolHead} is specified, the probability of correct pooled treatment selection is assessed for each set of two pooled treatment arms.
+
+VE(0--\eqn{t}) is estimated as one minus the ratio of Nelson-Aalen-based cumulative incidence functions. The null hypothesis H0: VE(0--\eqn{t}) \eqn{\le} \eqn{b} x 100\% is rejected if the lower bound of the two-sided (1-\code{alpha}) x 100\% confidence interval for VE(0--\eqn{t}) lies above \eqn{b}.
+
+For head-to-head individual and pooled treatment comparisons, powers to reject the null hypotheses that relative VE(0--\code{stage1}) \eqn{\le} 0\% and relative VE(0--\code{stage2}) \eqn{\le} 0\% are assessed using the aforementioned testing rule.
+}
+\value{
+If \code{saveDir} is specified, the output list (named \code{out}) is saved as an \code{.RData} file in \code{saveDir} (the path to \code{saveDir} is printed); otherwise it is returned. The output object is a list with the following components:
+\item{rankSelectPw}{the probability of correct selection of the winning most efficacious individual treatment}
+\item{headHeadPw}{if \code{headHead} is specified, a matrix of powers to detect relative VE(0--\code{stage1}) (column 1) and relative VE(0--\code{stage2}) (column 2) in head-to-head comparisons of individual treatment arms}
+\item{poolRankSelectPw}{if \code{poolHead} is specified, a numeric vector of the probabilities of correct selection of the winning most efficacious pooled treatment for each set of pooled treatments}
+\item{poolHeadPw}{if \code{poolHead} is specified, a matrix of powers to detect relative VE(0--\code{stage1}) (column 1) and relative VE(0--\code{stage2}) (column 2) in head-to-head comparisons of pooled treatment arms}
+}
+\seealso{
+\code{\link{simTrial}}, \code{\link{monitorTrial}}, and \code{\link{censTrial}}
+}
+\examples{
+simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2), 
+                    VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78, 
+                    enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05, 
+                    infecRate=0.04, fuTime=156, 
+                    visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+                    missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
+                    stage1=78, randomSeed=300)
+                    
+monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
+                            harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+                            minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, 
+                            nonEffInterval=20, lowerVEnoneff=0, upperVEnoneff=0.4, 
+                            highVE=0.7, stage1VE=0, lowerVEuncPower=0, 
+                            alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+                            alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26)
+                            
+censData <- censTrial(dataFile=simData, monitorFile=monitorData, stage1=78, 
+                      stage2=156)
+                      
+rankData <- rankTrial(censFile=censData, idxHighestVE=2, 
+                      headHead=matrix(2:1, nrow=1, ncol=2), lowerVE=0, stage1=78, 
+                      stage2=156, alpha=0.05)
+
+### alternatively, to save the .RData output file (no '<-' needed):
+###
+### simTrial(N=c(1400, rep(1000, 2)), aveVE=seq(0, 0.4, by=0.2), VEmodel="half", 
+###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
+###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
+###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
+###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+###          stage1=78, saveDir="./", randomSeed=300)
+###
+### monitorTrial(dataFile=
+###          "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
+###          stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+###          minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, nonEffInterval=20, 
+###          lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, stage1VE=0, 
+###          lowerVEuncPower=0, alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+###          alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26, saveDir="./")
+###
+### censTrial(dataFile=
+###  "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData",
+###  monitorFile=
+###  "monitorTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04_cuminc.RData",
+###  stage1=78, stage2=156, saveDir="./")
+###
+### rankTrial(censFile=
+###  "trialDataCens_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04_cuminc.RData",
+###  idxHighestVE=2, headHead=matrix(2:1, nrow=1, ncol=2), lowerVE=0, stage1=78, 
+###  stage2=156, alpha=0.05, saveDir="./")
+}
