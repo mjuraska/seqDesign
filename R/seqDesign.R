@@ -478,12 +478,6 @@ getDropout <- function(N, rate)
 
 getInfection <- function(N, baseRate, relRates=NULL, trtAssgn=NULL)
 {
-  #infecRateTbl <- data.frame( trt     = c("C1", "T1", "T1"),
-  #                            start   = c( 1,     1    27),
-  #                            end     = c(NA,    26,   NA),
-  #                            relRate = c( 1,     1,   VE)
-  #                          )
-  
   ## if no object is provided for relRates, then 'trtAssgn' isn't
   ## needed and all data is generated using the 'baseRate' value
   if ( is.null(relRates) )
@@ -728,13 +722,13 @@ getTreatmentAssignment <-
         ## We allow user to use a poor block size if they really want to (may be
         ## necessary in odd cases?), but issue a warning about it
         if ( max( abs( nPerBlock/sum(nPerBlock) - prob ) > sqrt(.Machine$double.eps) )) {
-           warning(
-             "\n  The given value of blockSize, ", blockSize,
-             ", is not compatible with the value\n",
-             "of argument 'prob'.  Blocks of the specified size cannot create a\n",
-             "treatment distribution that matches 'probs'.  We suggest using\n",
-             "function 'getBlockSize' to determine a suitable block size and then\n",
-             "re-running (see help(getBlockSize))\n\n", immediate=TRUE)
+           warning("\n",
+             "The given value of blockSize, ", blockSize, "is not compatible",
+             "with the value\n", "of argument 'prob'.  Blocks of the specified ",
+             "size cannot create a\n", "treatment distribution that matches ",
+             "'probs'.  We suggest using\n", "function 'getBlockSize' to ",
+             "determine a suitable block size and then\n", "re-running",
+             " (see help(getBlockSize))\n\n", immediate=TRUE)
         } 
       } else {
         if ( useNPT ) {  
@@ -1172,510 +1166,36 @@ summInterimData <- function( obsEDI )
       "nInfected =", nInfected, "\n")
 }
 
-applyStopRules <- function(d, infectionTotals, boundLabel="highEff", lowerHRnoneff=NULL, upperHRnoneff=NULL, stage1HR=NULL, upperHRuncPower=NULL, highHR=NULL, 
-                          alphaNoneff=0.05, alphaStage1=0.05, alphaUncPower=0.05, alphaHigh=0.05, post6moCut=26, post6moMonitor, estimand) {
-  
-  ## This function apply the stopping rules for nonefficacy and high efficacy monitoring.
-  ## A vector of events where nonefficacy monitoring
-  ## will occur is inputed by argument 'infectionTotals', for example (50, 70, 90, 110, 130, 150).
-  ## If estimand="combined", the nonefficacy bound is reached if both 95% CIs for HR and cumulative incidence ratio (FR) 
-  ## (1) lie above alternative HR ('HaHR'); (2) not below 'NullHR' (usually 1).
-  ##
-  ## Argument 'd' should be a data.frame containing (at least) columns:
-  ##   'entry' - the entry time (in trial time)
-  ##   'exit'  - time of event, trial completion or dropout (trial time)
-  ##   'event' - 0/1 indicator of event of interest
-  ##   'trt'   - 0/1 indicator of vaccine receipt
-  ## 
-  ## Other arguments:
-  ## ---------------
-  ## 'infectionTotals' - a vector specifying the total number of infections
-  ##                     at which analyses should take place.  The contents 
-  ##                     of this vector must be ordered (smallest to largest)
-  ## 
-  ## 'boundLabel'  - can only take on values "HighEff" or "NonEff"
-  ##
-  ## 'post6moCut'  - cut off time (in weeks)
-  ## 'estimand'    - a character string specifying the estimand of interest (can be one of "combined", "cox", and "cuminc")
-  ##
-  ## check contents of 'd'
-  if ( !all( c("entry","exit","event","trt") %in% names(d) ) )
-    stop("DataFrame 'd' must contain columns: entry, exit, event, and trt\n")
-  
-  ## check specification of bounds
-  Lower <- ifelse( boundLabel=="NonEff", FALSE, TRUE )
-  
-  if (Lower){ # high efficacy monitoring
-    if (any(is.null(highHR),is.null(alphaHigh))){ stop("The arguments 'highHR' and 'alphaHigh' must be specified for high efficacy monitoring.\n") }
-  } else {    # non-efficacy monitoring
-    if (any(is.null(lowerHRnoneff),is.null(upperHRnoneff),is.null(alphaNoneff))){ stop("The arguments 'lowerHRnoneff', 'upperHRnoneff', and 'alphaNoneff' must be specified for non-efficacy monitoring.\n") }
-  }
-  
-  if (estimand=="combined" & post6moMonitor){ stop("Post-6 months monitorting for non-efficacy is not implemented for the 'combined' approach.") }
-  
-  ## store the length of the infections totals
-  L <- length(infectionTotals)
-  
-  ## sanity check: make sure that 'infectionTotals', 'lowerBounds' are all 
-  ## ordered correctly, and no dups in 'infectionTotals'
-  ## (infectionTotals increasing)
-  if (L > 1) {
-    if ( any( diff(infectionTotals) <= 0 ) ){
-      stop("Argument 'infectionTotals' must be ordered by increasing",
-           "magnitude.\n", "Please fix and retry.\n")
-    }     
-  }
-  
-  ## Make sure we have only two trt groups and that they're coded as 0 and 1
-  uniq.trt <- sort( unique(d$trt) )
-  if ( length(uniq.trt)>2 ) {
-    warning("The data set given to 'applyStopRules' contains", length(uniq.trt),
-            "treatments - it should only contain 2.\n") 
-  } else if ( any( uniq.trt != c(0,1) ) ) { 
-    warning("The data set given to 'applyStopRules' contains values of 'trt'",
-            "other than 0 and 1, this is probably an error.\n",
-            "The values are: ", uniq.trt[1], " and ", uniq.trt[2], "\n\n")
-  }
-  
-  options( stringsAsFactors = FALSE)
-  
-  firstEnrollTime <- min(d$entry, na.rm=TRUE)
-  
-  ## select out events
-  eventDF <- subset(d, event == 1, select=c(exit,trt))
-  
-  ## order events by time of occurrence 
-  eventDF <- eventDF[ order(eventDF$exit), ,drop=FALSE]
-  
-  ## add column indicating the total number of infections accrued at each event time
-  n <- nrow(eventDF)
-  eventDF$totInfec <- 1:n
-  
-  ## add a final test at n for non efficacy test
-  #if (!Lower) {
-  #   if (max(infectionTotals)<n)
-  #     infectionTotals = c(infectionTotals, n)
-  #}
-  ## get the number of tests specified
-  nTests <- length(infectionTotals) # duplicate information: 'L' defined above the same
-    
-  ## extract 'exit' times corresponding to the infection totals given
-  ## in 'infectionTotals' 
-  testTimes <- subset(eventDF, totInfec %in% infectionTotals)$exit
-  
-  ## count how many times we have in 'testTimes' (we may not have accrued enough
-  ## infections to perform all the tests specified via the argument 'infectionTotals'
-  K <- length( testTimes )
-  
-  ## if we didn't reach any of the infection totals at which we planned to test
-  ## then exit out, returning basic info
-  if (K == 0) {
-    return( list( finished = FALSE,
-                  boundHit = NA, 
-                  altDetected = NA,
-                  stopTime = NA, 
-                  stopInfectCnt = NA,
-                  totInfecCnt = n,
-                  totInfecSplit= table(eventDF$trt),
-                  lastExitTime = max(d$exit) - firstEnrollTime) )   ## stage 1 exit time
-  }
-  
-  ## order the full data by entry times 
-  d <- d[ order(d$entry), ]
-  
-  
-  ## create an object to be filled in during our testing loop below
-  ## and which will be output by the function.  Contains summary info
-  ## about the status at each test.  
-  summObj <- data.frame(test = (1:K), 
-                        testTime = testTimes,
-                        ppts = integer(K),
-                        FU= numeric(K),
-                        infectTotal = infectionTotals[1:K],
-                        infectSplit = character(K), 
-                        
-                        pptsPost6mo = integer(K),
-                        FUPost6mo= numeric(K),
-                        infectPost6mo = integer(K),
-                        infectSplitPost6mo = character(K),
-                        infectPctPost6mo = numeric(K),
-                        
-                        EstCumulatIncid = numeric(K),
-                        EstHazardRatio = numeric(K))
-  
-  ## create the model ('coxFormula') to be fit by coxph()
-  coxFormula <- Surv(futime.i, event.i) ~ trt
-  
-  ## indicator of whether trial is done (stopping bound hit)
-  done <- FALSE
-  
-  ## initialize var 'bound', which will indicate which bound was hit
-  bound <- NA
-  
-  nVaxInfStage1 <- NA
-  altDetected <- NA
-  
-  for ( i in 1:K ) {
-    
-    t.i <- testTimes[i]
-    
-    ## restrict data to what would be observed at time 't.i'
-    D <- subset(d, entry < t.i )  
-    D$event.i <- D$event & (D$exit <= t.i) # a logical vector
-    D$futime.i <- pmin(D$exit, t.i) - D$entry 
-    
-    # indicator of a post-6 months infection
-    D$event.i6 <- D$event.i & (D$futime.i>post6moCut)
-    
-    ## populate summary object with basic info
-    #summObj$EstHazardRatio[i] <- hr.i
-    
-    summObj$ppts[i] <- nrow(D)
-    summObj$pptsPost6mo[i] <- sum( D$futime.i > post6moCut, na.rm=TRUE )
-    
-    summObj$FU[i] <- sum( D$futime.i )
-    summObj$FUPost6mo[i] <- sum( pmax(D$futime.i - post6moCut, 0), na.rm=TRUE )
-    
-    infectTbl <- table( D$trt[ D$event.i ] )
-    
-    ## record infection "splits" (number of placebo infections: number of vacc infections)
-    if ( length(infectTbl)== 2) { 
-      infectionsInOnlyOneGroup <- FALSE
-      summObj$infectSplit[i] <- paste("Pl:Vx =", paste(infectTbl,collapse=":") )
-    } else {
-      infectionsInOnlyOneGroup <- TRUE
-      tbl <- c(0, 0)
-      tbl[ 1 + as.numeric( names(infectTbl ) ) ] <- as.numeric(infectTbl)
-      summObj$infectSplit[i] <- paste("Pl:Vx =", paste(tbl,collapse=":") )
-    }
-    
-    summObj$infectPost6mo[i] <- sum( D$event.i & D$futime.i>post6moCut)
-    summObj$infectPctPost6mo[i] <- 100 * ( summObj$infectPost6mo[i] / summObj$infectTotal[i] )
-    
-    ## record infection "splits" for post6month infections
-    infectPost6moTbl <- table( D$trt[ D$event.i & D$futime.i>post6moCut] )
-    if (length(infectPost6moTbl) == 2) {
-      summObj$infectSplitPost6mo[i] <- paste("Pl:Vx =", paste(infectPost6moTbl,collapse=":") )
-    } else {
-      tbl <- c(0, 0)
-      if (length(infectPost6moTbl) == 1)
-        tbl[ 1 + as.numeric( names(infectPost6moTbl) ) ] <- as.numeric(infectPost6moTbl)
-      summObj$infectSplitPost6mo[i] <- paste("Pl:Vx =", paste(tbl,collapse=":") )
-    }    
-    
-    ## We need infections in both trt groups to create (Wald) confidence intervals for
-    ## the hazard ratio and for the other ratio being used. So if we encounter a case
-    ## where there are zero infections in one group, we will not try to get estimates
-    ## but will skip ahead to the next analysis. 
-    ##
-    ## This approach is fine because the group with zero infections has to be the 
-    ## vaccine group due to the harm monitoring we have in place (if there were zero
-    ## placeo infections we'd have hit harm bound before getting to the noneff 
-    ## monitoring).  And if there are 0 infections in the vaccine group we will never
-    ## stop for non-efficacy, as that's the best-case scenario for a vaccine.
-    
-    if ( !Lower && infectionsInOnlyOneGroup ) {
-      
-      ## check on the code (make sure infections are in placebo group)
-      if ( unique( D$trt[D$event.i] ) == 1 )
-        stop("All infections are in the vaccine group.\n",
-             "Either harm monitoring is not being done or else it is",
-             "broken\n")
-      
-      ## fill in point estimates in 'summObj' and go to next time point
-      summObj$EstHazardRatio[i]  <- 0
-      summObj$EstCumulatIncid[i] <- 0
-      
-      next
-    }
-    
-    
-    ## run cox model
-    coxPH.i <- coxph( coxFormula, data=D )
-    if (post6moMonitor){ coxPH.i6 <- coxph(Surv(futime.i,event.i6) ~ trt, data=D) }
-    
-    ## extract the hazard ratio for 'trt' and store         
-    hr.i <- exp( coxPH.i$coef )
-    summObj$EstHazardRatio[i] <- hr.i
-    
-    if (estimand %in% c("combined", "cuminc")){
-      ## calculate cumulative incidence (Fv/Fp) and its CI 
-      KM <- survfit(coxFormula, data=D, error="greenwood")
-      KM.sum <- summary(KM)
-            
-      # Nelson-Aalen estimates
-      na.0 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=0"]/KM.sum$n.risk[KM.sum$strata=="trt=0"])
-      varna.0 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=0"]/KM.sum$n.risk[KM.sum$strata=="trt=0"]^2)
-      na.0 <- na.0[length(na.0)]
-      varna.0 <- varna.0[length(varna.0)]      
-      
-      na.1 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=1"]/KM.sum$n.risk[KM.sum$strata=="trt=1"])
-      varna.1 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=1"]/KM.sum$n.risk[KM.sum$strata=="trt=1"]^2)
-      na.1 <- na.1[length(na.1)]
-      varna.1 <- varna.1[length(varna.1)]
-            
-      # survival estimates
-      S.0 <- exp(-na.0)
-      varS.0 <- ifelse(is.na(varna.0), NA, exp(-2*na.0) * varna.0)
-      S.1 <- exp(-na.1)
-      varS.1 <- ifelse(is.na(varna.1), NA, exp(-2*na.1) * varna.1)
-      
-      # cumulative incidence ratio
-      F.0 <- 1 - S.0
-      F.1 <- 1 - S.1
-      FR.i <- F.1/F.0
-      varlogFR <- ifelse(is.na(varS.0) | is.na(varS.1), NA, varS.1/(F.1^2) + varS.0/(F.0^2))
-      
-      summObj$EstCumulatIncid[i] <- FR.i
-      
-      if (post6moMonitor){
-        ## calculate cumulative incidence (Fv/Fp) and its CI 
-        KM <- survfit(Surv(futime.i,event.i6) ~ trt, data=D, error="greenwood")
-        KM.sum <- summary(KM)
-                
-        # Nelson-Aalen estimates
-        na.0 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=0"]/KM.sum$n.risk[KM.sum$strata=="trt=0"])
-        varna.0 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=0"]/KM.sum$n.risk[KM.sum$strata=="trt=0"]^2)
-        na.0 <- na.0[length(na.0)]
-        varna.0 <- varna.0[length(varna.0)]      
-        
-        na.1 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=1"]/KM.sum$n.risk[KM.sum$strata=="trt=1"])
-        varna.1 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=1"]/KM.sum$n.risk[KM.sum$strata=="trt=1"]^2)
-        na.1 <- na.1[length(na.1)]
-        varna.1 <- varna.1[length(varna.1)]
-        
-        # survival estimates
-        S.0 <- exp(-na.0)
-        varS.0 <- ifelse(is.na(varna.0), NA, exp(-2*na.0) * varna.0)
-        S.1 <- exp(-na.1)
-        varS.1 <- ifelse(is.na(varna.1), NA, exp(-2*na.1) * varna.1)
-        
-        # cumulative incidence ratio
-        F.0 <- 1 - S.0
-        F.1 <- 1 - S.1
-        FR.i6 <- F.1/F.0
-        varlogFR6 <- ifelse(is.na(varS.0) | is.na(varS.1), NA, varS.1/(F.1^2) + varS.0/(F.0^2))
-      }
-    }
-    
-    ## Compare HR (and FR) to the boundaries
-    if ( Lower ){  # high efficacy monitoring
-      if (estimand=="cox"){
-        HRci.up <- exp(coxPH.i$coef+qnorm(1-alphaHigh/2)*sqrt(coxPH.i$var))        
-        if ( HRci.up < highHR  ) {
-          done <- TRUE
-          bound <- "HighEff"
-        } else {
-          if (i==K) {   ## the end of high eff monitoring
-            done = TRUE
-            bound = "notHighEff"
-          }
-        }
-      }
-      
-      if (estimand!="cox"){
-        FRci.up <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)+qnorm(1-alphaHigh/2)*sqrt(varlogFR)))        
-        if ( FRci.up < highHR ) {
-          done <- TRUE
-          bound <- "HighEff"
-        } else {
-          if (i==K) {   ## the end of high eff monitoring
-            done = TRUE
-            bound = "notHighEff"
-          }
-        }
-      }
-    } else {  # either non-efficacy monitoring or end-of-Stage 1 test for advancement into Stage 2
-      if (i == K && infectionTotals[i]==n ) { ##  test for positive efficacy at the end of Stage 1 for advancement into Stage 2      
-        done <- TRUE
-        nVaxInfStage1 <- sum(D$event.i[D$trt==1])
-        
-        if (infectionsInOnlyOneGroup==TRUE){  # if there are zero infections in the vaccine group
-          bound <- "Eff"
-        } else {
-          if (estimand=="cox"){ 
-            HRci.up <- exp(coxPH.i$coef+qnorm(1-alphaStage1/2)*sqrt(coxPH.i$var))            
-            bound <- ifelse(HRci.up < stage1HR, "Eff", "NonEffFinal")
-          }
-        
-          if (estimand!="cox"){ 
-            FRci.up <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)+qnorm(1-alphaStage1/2)*sqrt(varlogFR)))            
-            bound <- ifelse(FRci.up < stage1HR, "Eff", "NonEffFinal")
-          }          
-        }       
-      } else {  # non-efficacy interim analysis before the end of Stage 1
-        if (post6moMonitor){  # estimand must be different from 'combined'          
-          if (estimand=="cox"){
-            HRci.lw <- exp(coxPH.i$coef-qnorm(1-alphaNoneff/2)*sqrt(coxPH.i$var))  
-            HRci.up <- exp(coxPH.i$coef+qnorm(1-alphaNoneff/2)*sqrt(coxPH.i$var))
-            HRci.lw6 <- exp(coxPH.i6$coef-qnorm(1-alphaNoneff/2)*sqrt(coxPH.i6$var))  
-            HRci.up6 <- exp(coxPH.i6$coef+qnorm(1-alphaNoneff/2)*sqrt(coxPH.i6$var))
-            if ( all(lowerHRnoneff < c(HRci.lw, HRci.lw6)) && all(upperHRnoneff < c(HRci.up, HRci.up6)) ) {
-              done <- TRUE
-              bound <- "NonEffInterim"
-            }
-          }
-          
-          if (estimand=="cuminc"){
-            FRci.lw <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)-qnorm(1-alphaNoneff/2)*sqrt(varlogFR))) 
-            FRci.up <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)+qnorm(1-alphaNoneff/2)*sqrt(varlogFR)))
-            FRci.lw6 <- ifelse(is.na(varlogFR6), NA, exp(log(FR.i6)-qnorm(1-alphaNoneff/2)*sqrt(varlogFR6))) 
-            FRci.up6 <- ifelse(is.na(varlogFR6), NA, exp(log(FR.i6)+qnorm(1-alphaNoneff/2)*sqrt(varlogFR6)))
-            if ( all(lowerHRnoneff < c(FRci.lw, FRci.lw6)) && all(upperHRnoneff < c(FRci.up, FRci.up6)) ) {
-              done <- TRUE
-              bound <- "NonEffInterim"
-            }
-          }
-        } else {
-          if (estimand=="combined"){
-            HRci.lw <- exp(coxPH.i$coef-qnorm(1-alphaNoneff/2)*sqrt(coxPH.i$var))
-            HRci.up <- exp(coxPH.i$coef+qnorm(1-alphaNoneff/2)*sqrt(coxPH.i$var))
-            FRci.lw <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)-qnorm(1-alphaNoneff/2)*sqrt(varlogFR)))
-            FRci.up <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)+qnorm(1-alphaNoneff/2)*sqrt(varlogFR)))          
-            if ( all( lowerHRnoneff < c(HRci.lw, FRci.lw) ) && all( upperHRnoneff < c(HRci.up, FRci.up) ) ) {
-              done <- TRUE
-              bound <- "NonEffInterim"
-            }
-          }
-          
-          if (estimand=="cox"){
-            HRci.lw <- exp(coxPH.i$coef-qnorm(1-alphaNoneff/2)*sqrt(coxPH.i$var))  
-            HRci.up <- exp(coxPH.i$coef+qnorm(1-alphaNoneff/2)*sqrt(coxPH.i$var))
-            if ( lowerHRnoneff < HRci.lw && upperHRnoneff < HRci.up ) {
-              done <- TRUE
-              bound <- "NonEffInterim"
-            }
-          }
-          
-          if (estimand=="cuminc"){
-            FRci.lw <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)-qnorm(1-alphaNoneff/2)*sqrt(varlogFR))) 
-            FRci.up <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)+qnorm(1-alphaNoneff/2)*sqrt(varlogFR)))
-            if ( lowerHRnoneff < FRci.lw && upperHRnoneff < FRci.up ) {
-              done <- TRUE
-              bound <- "NonEffInterim"
-            }
-          }
-        }                
-      }
-    }
-    
-    # test for design alternative
-    if (done) {  # i.e., when the trial stops
-      if (!is.null(upperHRuncPower)){
-        if (infectionsInOnlyOneGroup==TRUE){  # if there are zero infections in the vaccine group
-          altDetected <- !logical(length(upperHRuncPower))
-        } else {
-          if (estimand=="cox"){
-            HRci.up <- exp(coxPH.i$coef+qnorm(1-alphaUncPower/2)*sqrt(coxPH.i$var))            
-            altDetected <- HRci.up < upperHRuncPower
-          }
-          
-          if (estimand!="cox"){
-            FRci.up <- ifelse(is.na(varlogFR), NA, exp(log(FR.i)+qnorm(1-alphaUncPower/2)*sqrt(varlogFR)))            
-            altDetected <- FRci.up < upperHRuncPower
-          }
-        }
-      }
-    }
-    
-    if (done) break
-  }  
-  
-  if (done) {
-    ## Time since the first subject was enrolled and number of infections at which we stopped
-    stopTime <- t.i - firstEnrollTime
-    Ninfec <- summObj$infectTotal[i]
-  } else {
-    stopTime <- NA 
-    Ninfec   <- NA 
-  }
-  
-  ## get the time of the last ppt's exit from the study
-  ## Really only needed when the trial doesn't stop via testing (i.e.
-  ## not enough infections accrue), but return for all cases anyway.
-  lastExitTime <- max(d$exit) - firstEnrollTime
-  
-  ## subset summary object to just rows for tests done
-  summObjsub <- summObj[1:i, ]
-  
-  if(estimand!="cuminc" & !infectionsInOnlyOneGroup & !is.na(bound)){ 
-    if (bound=="NonEffInterim"){ alpha <- alphaNoneff }
-    if (bound %in% c("Eff","NonEffFinal")){ alpha <- alphaStage1 }
-    if (bound %in% c("HighEff","notHighEff")){ alpha <- alphaHigh }
-    HRci.lw <- exp(coxPH.i$coef-qnorm(1-alpha/2)*sqrt(coxPH.i$var))  
-    HRci.up <- exp(coxPH.i$coef+qnorm(1-alpha/2)*sqrt(coxPH.i$var))
-    CI.out <- c(HRci.lw,HRci.up) 
-  } else { 
-    CI.out <- NA 
-  }
-  
-  return( list( finished = done,
-                boundHit = bound, 
-                altDetected = altDetected,
-                stopTime = stopTime, 
-                stopInfectCnt = Ninfec,
-                totInfecCnt = n,
-                totInfecSplit= table(eventDF$trt),
-                lastExitTime = lastExitTime,
-                finalHRci = CI.out,
-                summObj = summObjsub,
-                nVaxInfStage1 = nVaxInfStage1) )
-}
 
 ## Function to determine the number (i.e. count) of the first event that
-## meets both of the following criteria:
-##   (a) the cumulate percentage of events having some property meets or
-##       exceeds the value given in 'minPercent',  and
-##   (b) the number/count of the event is at least as large as 'minCount'
+## meets all the following criteria:
 ##
 ## The arguments to the function are: 
 ## ----------------------------------
-##   'x': an indicator vector (0/1 or FALSE/TRUE) reporting whether each
-##        event has some property.  The vector should only contain info
-##        on *EVENTS*. 
+##   'd':
 ##
-##   'minPercent': the threshold that must be met for the cumulative 
-##                 percentage of "positive" entries (1s or TRUEs) in 'x'
-##
-##   'minCount':   the minimum event total that must be attained along
-##                 with the minimum percentage threshold
-##
-## Example:  
-##   We have defined the infection total at which we wish to perform the first
-##   non-efficacy analysis for a vaccine as the smallest infection count for
-##   which the percentage of infections occurring at least 6-months
-##   post-enrollment reaches/exceeds 30% of infections, with the additional
-##   criteria that the total must also be at least 50 (to be of sufficient 
-##   size that the "large sample" normal-approximations used in the monitoring
-##   criteria are reasonable.
-##
-get_firstTest_infecCnt <- function(x, minPercent = 0, minCount = 0) {
-  
-  len.x <- length(x)
-  pct <- 100 * cumsum( x ) / (1:len.x )
-  
-  pctCriteria <- (pct >= minPercent)
-  cntCriteria <- ( ( 1:len.x ) >= minCount )
-  
-  if ( any(both <- pctCriteria & cntCriteria) ) {
-    ## if any values meet both criteria, return the first one
-    return( which(both)[1] )
-  } else {
-    ## if no values meet both criteria, then either:
-    ##   (a) we never exceeded minCount, or
-    ##   (b) we never exceeded minPercent 
-    ## (possibly both, but not likely)
-    if ( len.x < minCount ) {
-      outname <- "Too Few Events"
-    } else if ( pctCriteria[len.x] < minPercent ) {
-      outname <- "Pct Too Low" 
-    } else {
-      outname <- "Other"
-    }
-    
-    ## return an 'NA' with a name attached giving info on the reason
-    return( structure( NA, names = outname) )
-  }
+getFirstNonEffCnt <- 
+    function(d, minCnt=75, maxCnt=Inf, lagTimes=c(26,52), lagMinCnts=c(10,2) )
+{ 
+  ## extract events
+  events <- d[d$event==1, c("exit","entry")]
+
+  ## order by calendar time of event (i.e. 'exit')
+  events <- events[order(events$exit), ]
+
+  ## add on a count index
+  events$cnt <- 1:nrow(events)
+
+  ## vector of infection totals at which each lag condition is met
+  lagCondCnts <- mapply(FUN= function(lagtime, mincnt, dat) {
+                            wLag <- ( (dat$exit - dat$entry) > lagtime)
+                            dat$cnt[ wLag ][ mincnt ] },
+                        lagtime=lagTimes, mincnt=lagMinCnts, 
+                        MoreArgs=list(dat=events ) )
+
+   ## The minimum of 'maxCnt' and largest of minCnt and the values that satisfy
+   ## the lagMinCnts conditions
+   min(maxCnt, max( minCnt, lagCondCnts ) )
 }
 
 
@@ -1719,7 +1239,7 @@ do_harm_monitoring <- function(d, bounds, totInfecVar="N", vaccInfecVar="V") {
   ## bounds[[ totInfecVar ]]).   Compare the subsetted values to the 
   ## values in: bounds[[ vaccInfecVar ]].  If any are equal we stop.
   vaccInfecSub <- vaccInfecCnt[ bounds[[totInfecVar ]] ] # matching 'vaccInfecCnt' to 'bounds'
-  harmBoundsHit <- ( vaccInfecSub == bounds[[ vaccInfecVar ]])
+  harmBoundsHit <- ( vaccInfecSub >= bounds[[ vaccInfecVar ]])
   
   ## remove NA (added by Yu on 12/28/2011)
   if ( any( harmBoundsHit, na.rm=TRUE ) ) {
@@ -1734,7 +1254,7 @@ do_harm_monitoring <- function(d, bounds, totInfecVar="N", vaccInfecVar="V") {
     list( isHarm = TRUE,
           stopTime = d$exit[ N ], # 'd' is ordered by 'exit' time
           stopInfectCnt = N,
-          stopInfecSplit = c(Vacc = V, Plac = N - V))
+          stopInfectSplit = c(Vacc = V, Plac = N - V))
     
   } else {
     list( isHarm = FALSE )
@@ -1806,7 +1326,7 @@ do_harm_monitoring2 <- function(d, bounds, d2, stage1 =78,  totInfecVar="N", vac
           stopTime = d$exit[ N ],
           stopTimeStg1 = stopTimeStg1,
           stopInfectCnt = N,
-          stopInfecSplit = c(Vacc = V, Plac = N - V))
+          stopInfectSplit = c(Vacc = V, Plac = N - V))
     
   } else {
     list( isHarm = FALSE )
@@ -1847,8 +1367,6 @@ do_harm_monitoring2 <- function(d, bounds, d2, stage1 =78,  totInfecVar="N", vac
 ##
 ##   'Stop' - numeric vector of length N, with Stop[i] giving the prob.
 ##            of hitting the stopping bound (for first time) at n=i
-
-
 pNS <- function(Bound, p=.5, N=45)
 {
   if( length(Bound) != N )
@@ -1924,23 +1442,24 @@ semiConstSpending <- function(x, alphaVals, startHarmMonitor )
   alphaVals[ which.interval ]
 }
 
-## function to create CSV filenames
-fileNameFunc <- function( p, N, null.p)
+getAlphaPerTest <- function(harmMonitorRange, null.p, totalAlpha=0.05) 
 {
-  paste0("harmBounds_N=", N, "_alphaPerTest=", p, "_pVacc=", null.p, ".csv")
-}
-
-getAlphaPerTest <- function(harmMonitorRange, null.p){
-  getCumAlpha <- function(alphaPerTest, harmMonitorRange, null.p){ 
-    harmBounds <- getHarmBound(N=harmMonitorRange[2], per.test=alphaPerTest, harmMonitorRange=harmMonitorRange, null.p=null.p) 
-    return(harmBounds$cumStopProb[NROW(harmBounds)] - 0.05)
-  }
-  return(uniroot(getCumAlpha, c(0,0.05), harmMonitorRange=harmMonitorRange, null.p=null.p)$root)
+    getCumAlpha <- function( alphaPerTest, harmMonitorRange, null.p) { 
+        harmBounds <- getHarmBound(
+                          N = harmMonitorRange[2], 
+                          per.test = alphaPerTest, 
+                          harmBoundRange = harmMonitorRange,
+                          null.p = null.p)
+        return( harmBounds$cumStopProb[ nrow(harmBounds) ] - totalAlpha )
+    }
+    return( uniroot(getCumAlpha, interval = c(0,0.05), 
+                    harmMonitorRange = harmMonitorRange, 
+                    null.p=null.p)$root )
 }
 
 getHarmBound <- function(N,  ##Total number of infections desired for harm monitoring
                          per.test, ## value for per-test alpha level
-                         harmMonitorRange,
+                         harmBoundRange,
                          null.p,
                          dataDir = NULL,
                          verbose = TRUE){
@@ -1950,9 +1469,6 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
   ##              recipients.  Hence 'null.p' equals the fraction of the populations that
   ##              has received vaccine.  This would be 0.5 under a 1:1 randomization, or
   ##              11/29 under a 11:18 randomization (V:P).
-  
-  ## Storage for output of per.test.alpha and
-  summ <- data.frame(alpha = per.test, totAlpha = NA)
   
   ## We consider the total number of infected participants to be 'N' and
   ## assume apriori and equal likelihood of infection for vaccinees as for
@@ -1982,7 +1498,7 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
     totInfec <- bounds$totInfec[j]
     
     alphaVal <- semiConstSpending( totInfec, alphaVals=c(0, per.test),
-                                   startHarmMonitor = harmMonitorRange)
+                                   startHarmMonitor = harmBoundRange)
     
     ## we don't need to do the next few steps unless alphaVal is > 0
     if (alphaVal <= 0) next
@@ -2004,15 +1520,6 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
     ## if we have at least one significant value then do...
     if ( isTRUE(signif[1]) )
     {
-      ## if we have all signif. values, then that's not good...
-      #if ( isTRUE( rev(signif)[1] ) )
-      #{
-      #    print( totInfec )
-      #    print( valSeq )
-      #    print( signif )
-      #    stop("Need to include more values in valSeq")
-      #}
-      
       ## get "largest" (last) index for which signif == TRUE
       largest.index <- max( which( signif ) )
       
@@ -2027,7 +1534,6 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
     }
     
   }
-  
   out <- pNS(Bound=bounds$vaccInfecBound, p=null.p, N=N)
   
   names(out$Bounds)[ names(out$Bounds)=="StoppingBound" ] <- "Nvacc"
@@ -2036,10 +1542,7 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
                      cumStopProb=round(cumsum(out$Stop),4),
                      alphaVal = bounds$cutoff )
   
-  
   overall.alpha <- out$totalStopProb
-  
-  summ$totAlpha <- overall.alpha
   
   out <- pNS(Bound=bounds$vaccInfecBound, p=null.p, N=N)
   
@@ -2050,13 +1553,20 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
   
   harmBounds =  boundOut
   names(harmBounds)[1:3]=c("N", "V", "P") 
-  if (!is.null(dataDir)){
-    fileName <- fileNameFunc(round(per.test, 4), N, round(null.p, 2))
-    write.csv(harmBounds, file.path(dataDir, fileName), row.names=FALSE)
-    if (verbose){ cat("Potential-harm stopping boundaries saved in:\n", file.path(dataDir, fileName), "\n\n") }
-  }    
+  if (!is.null(dataDir)) {
+      fileName <- sprintf("harmBounds_N=%d_alphaPerTest=%6.4f_pVacc=%4.2f.csv",
+                          N, round(per.test, 4), round(null.p, 2) )
+
+      write.csv(harmBounds, file.path(dataDir, fileName), row.names=FALSE)
+
+      if (verbose) {
+          cat("Potential-harm stopping boundaries saved in:\n", 
+              file.path(dataDir, fileName), "\n\n") 
+      }
+  }
   return(harmBounds)  
 }
+
 
 
 simTrial <- function(N,
@@ -2075,9 +1585,11 @@ simTrial <- function(N,
                     nTrials,
                     blockSize = NULL,
                     stage1,
+                    saveFile= NULL,
                     saveDir = NULL,
                     verbose = TRUE,
-                    randomSeed = NULL){
+                    randomSeed = NULL) {
+
 VEmodel <- match.arg(VEmodel)
   
 ## verify whether length of 'N' = length of 'aveVE'
@@ -2129,17 +1641,24 @@ if ( is.null(blockSize) ){
 ## 'parSet' contains weekly rates
 parSet <- list(enrollment=enrollRate, dropout=dropoutRate/52, infection=infecRate/52)
 
-## 'enrollSchedule' contains information on enrollment periods and corresponding enrollment rates  
-## 'enrollSchedule' is passed as an argument to the 'simFullEDIdata' function
-## partial enrollment within 'enrollPartial' weeks; full enrollment thereafter until the end of week 'enrollPeriod'
-enrollSchedule <- data.frame(start = c(1, enrollPartial+1), end = c(enrollPartial,NA), relativeRate=c(enrollPartialRelRate, 1))
 
-if(VEmodel!="constant"){
-   ## 'vaccEff' is a vector of true *full* VEs for each treatment (defined as a function of 'aveVE')
+## - 'enrollSchedule' contains information on enrollment periods and corresponding 
+##    enrollment rates. 
+## -'enrollSchedule' is passed as an argument to the 'simFullEDIdata' function.
+## - partial enrollment within 'enrollPartial' weeks; 
+## - full enrollment thereafter until the end of week 'enrollPeriod'
+enrollSchedule <- data.frame(
+                      start = c( 1, enrollPartial+1 ), 
+                      end   = c( enrollPartial, NA ),
+                      relativeRate = c( enrollPartialRelRate, 1) )
+
+if( VEmodel!="constant" ) {
+   ## 'vaccEff' is a vector of true *full* VEs for each treatment (defined as 
+   ##   a function of 'aveVE')
    vaccEff <- aveVE * (vePeriods[3]-1)/((vePeriods[3]-1)-(vePeriods[2]-1)/2)
 
-   ## If any value in 'vaccEff' is larger than 1, compute the largest possible average VE,
-   ## return it as part of the error message, and stop.
+   ## If any value in 'vaccEff' is larger than 1, compute the largest possible
+   ## average VE, return it as part of the error message, and stop.
    if ( any(vaccEff >= 1) ){
 
        ## which VE values are too large?
@@ -2161,10 +1680,10 @@ if(VEmodel!="constant"){
    vaccEff <- aveVE
 }
 
-## 'VEs' are true vaccine efficacies used for data generation
-## 'VEs' is a list with one component per treatment
-## each component is a vector of vaccine efficacies applied in various time periods of the trial (e.g.,
-## partial-VE, full-VE, and waning-VE period)
+## - 'VEs' are true vaccine efficacies used for data generation
+## - 'VEs' is a list with one component per treatment
+## - each component is a vector of vaccine efficacies applied in various time
+##   periods of the trial (e.g., partial-VE, full-VE, and waning-VE period)
 VEs <- vector("list", nVaccArms)
 
 for (ii in 1:nVaccArms) {
@@ -2180,20 +1699,23 @@ names(VEs) <- paste("T", 1:length(vaccEff), sep="")
 if ( length(VEs) != nVaccArms ) 
     stop( "VEs specified don't match the number of vaccine arms given in nVaccArms.\n" )
 
-## 'infecRateTbl' contains information on relative infection rates (hazard ratios) for each treatment.
-## Please use "Inf" rather than NA to represent intervals that continue indefinitely.
+## 'infecRateTbl' contains information on relative infection rates (hazard 
+##  ratios) for each treatment.  Please use "Inf" rather than NA to represent 
+##  intervals that continue indefinitely.
 
-## Each treatment must have a record starting at time 1 and must not have any time gaps in it.
-## It does not need to extend to time "Inf" but typically should.
+## Each treatment must have a record starting at time 1 and must not have time
+## gaps in it.  It does not need to extend to time "Inf" but typically should.
 infecRateList <- vector("list", nArms)
 names(infecRateList) <- c("C1", names(VEs))
 
 infecRateList[[1]] <- data.frame( trt = "C1", start = 1, end = Inf, relRate = 1)
+
 for (ii in 2:nArms) {
   trtName <- names(VEs)[ii-1]
   if (VEmodel=="half"){
-    infecRateList[[ii]] <- data.frame( trt = trtName, start = vePeriods,
-                                       end = c(vePeriods[-1]-1, Inf), relRate = 1 - VEs[[trtName]] )
+    infecRateList[[ii]] <- data.frame( trt = trtName,  start = vePeriods,
+                                       end = c(vePeriods[-1]-1, Inf), 
+                                       relRate = 1 - VEs[[trtName]] )
   }
   if (VEmodel=="constant"){
     infecRateList[[ii]] <- data.frame( trt = trtName, start = vePeriods,
@@ -2204,11 +1726,13 @@ infecRateTbl <- do.call(rbind, infecRateList)
 
 ## specify prior distributions for data simulation
 simParList <- parSet
-simFuncList <- list(enrollment=Constant, dropout=Constant, infection=Constant) # 'Constant' is a point-mass distribution
+
+## 'Constant' is a point-mass distribution (function)
+simFuncList <- list(enrollment=Constant, dropout=Constant, infection=Constant) 
 simPrior <- list( Function=simFuncList, params=simParList )
 
 ## set seed of random number generator
-if(!is.null(randomSeed)) {
+if( !is.null(randomSeed) ) {
     set.seed( randomSeed )
 }
 
@@ -2218,15 +1742,16 @@ if(!is.null(randomSeed)) {
 rates <- sampleRates(n=1, from=simPrior)
 
 ## create lists for storage of trial data
-trialList <- vector("list", nTrials)
-infecList = vector("list", nTrials)
-infecList2 = vector("list", nTrials)
-infecListAll = vector("list", nTrials)
-trialResult = vector("list", nTrials)
+trialList  <- vector("list", nTrials)
+infecList  <- vector("list", nTrials)
+infecList2 <- vector("list", nTrials)
+infecListAll <- vector("list", nTrials)
+trialResult  <- vector("list", nTrials)
 
 ## 1. Generate enrollment times
-## the number of enrolled subjects during a specific time interval is Poisson distributed with rate = 'rate' * (end - start + 1), i.e.,
-## N <- rpois(1, lambda = rate * (end - (start-1)))
+## the number of enrolled subjects during a specific time interval is Poisson 
+## distributed with rate = 'rate' * (end - start + 1), i.e.,
+##   N <- rpois(1, lambda = rate * (end - (start-1)))
 ## enrollment times are uniformly distributed in the (start, end) interval, i.e.,
 ## runif(N, min=start-1, max=end)
 
@@ -2270,12 +1795,16 @@ for ( i in 1:nTrials )
                        event = as.integer(infected)
                        )
     
-    if (!is.null(missVaccProb)){
+    if ( !is.null(missVaccProb) ) {
       # create a set of indicators of belonging to a per-protocol cohort
-      u <- runif(NROW(out))
       ppnames <- paste0("pp", 1:length(missVaccProb))
-      for (ppIdx in 1:length(missVaccProb)){
-        out[[ppnames[ppIdx]]] <- ifelse(out$exit - out$entry > VEcutoffWeek & u >= missVaccProb[ppIdx], 1, 0)
+      for (ppIdx in 1:length(missVaccProb)) {
+          ## set per-protocol indicator randomly (with prob. = 1 - missVaccProb[ppIdx])
+          ## for ppt.s with follow-up beyond VEcutoffWeek
+          idxNam <- ppnames[ppIdx]
+          out[[idxNam]] <- 0
+          FUcond <- ( EDI.i$futime > VEcutoffWeek )
+          out[[idxNam]][ FUcond ] <- rbinom( sum(FUcond), 1, p= 1 - missVaccProb[ppIdx]) 
       }
     }    
                          
@@ -2293,15 +1822,14 @@ for ( i in 1:nTrials )
     infecList[[ i ]] <- cntVec
     infecList2[[ i ]] <- cntVec2
     infecListAll[[ i ]] <- cntVecAll
-
-    ## store summary data into trialList
+## store summary data into trialList
     trialList[[ i ]] <- out
 }
 
 ## summary number of infections
-infectCnts <- vector("list", length=nVaccArms)
-infectCnts2 <- vector("list", length=nVaccArms)
-infectCntsAll <- vector("list", length=nVaccArms)
+#infectCnts <- vector("list", length=nVaccArms)
+#infectCnts2 <- vector("list", length=nVaccArms)
+#infectCntsAll <- vector("list", length=nVaccArms)
     
 ## Put everything into a "trial Object"
 trialObj <- list( trialData = trialList,
@@ -2313,6 +1841,7 @@ trialObj <- list( trialData = trialList,
                   fuTime = fuTime,
                   rates = parSet,
                   enrollSchedule = enrollSchedule,
+                  ## time of last enrollment
                   VEs = VEs,
                   infecRates= infecRateTbl,
                   randomSeed = randomSeed,
@@ -2322,15 +1851,25 @@ trialObj <- list( trialData = trialList,
                  )
 
   # save trial output and information on used rates
-  if (!is.null(saveDir)){
-    saveFile <- paste("simTrial_nPlac=", N[1], "_nVacc=", paste(N[-1], collapse="_"), "_aveVE=", paste(round(aveVE,2), collapse="_"), "_infRate=", infecRate,".RData", sep="")
+  if (!is.null(saveDir)) {
+      if (is.null(saveFile) ) 
+        saveFile <- 
+            paste0("simTrial_nPlac=", N[1], "_nVacc=", 
+                   paste(N[-1], collapse="_"), "_aveVE=",
+                   paste( round(aveVE,2), collapse="_"),
+                   "_infRate=", infecRate,".RData" )
+
     save(trialObj, file=file.path(saveDir, saveFile))
-    if (verbose){ cat("Output saved in:\n", file.path(saveDir, saveFile), "\n\n") }
-  } else {
-    return( trialObj )
-  }
+
+    if (verbose){ 
+        cat("Output saved in:\n", file.path(saveDir, saveFile), "\n\n") 
+    }
+  } 
+  return( invisible( trialObj ) )
 }
-########################### End of simTrial function ####################################################
+
+########################### End of simTrial function ###########################
+
 
 ## Function to determine the number (i.e. count) of the first event that
 ## meets all the following criteria:
@@ -2379,19 +1918,21 @@ getInfecCntFirstNonEff <-
     
     ## time that reach 'minCnt' infections 
     nInfec <- nrow(x)
+ 
+    futime <- x$exit - x$entry
     
     ## number of infections after 'week2'
-    nPostWk2 <- sum( x$futime > week2 )
+    nPostWk2 <- sum( futime > week2 )
     
     if ( (nInfec >= minCount) && (nPostWk2 >= nInfecAfterwk) ) {
       
       ## create column containing fraction of infections post-week1
-      postWk1_fract <- cumsum(x$futime>week1)/(1:nInfec) 
+      postWk1_fract <- cumsum(futime>week1)/(1:nInfec) 
       
       ## the value of N1 is the smallest 'N' that satisfies all three conditions
       ## SIMULTANEOUSLY
       N1 <- which( (x$nInf >= minCount) & (postWk1_fract >= minPercent) &
-                     ( cumsum(x$futime > week2) >= 2 ) )[ 1 ]
+                     ( cumsum(futime > week2) >= 2 ) )[ 1 ]
       
       ## if nothing meets all three criteria then 'N1' will have length 0
       if ( length(N1) == 0 )
@@ -2400,536 +1941,38 @@ getInfecCntFirstNonEff <-
     return( N1 ) 
   }
 
-
-monitorTrial = function(dataFile,
-                        stage1,
-                        stage2,
-                        harmMonitorRange,
-                        alphaPerTest=NULL,                        
-                        minCnt,
-                        minPct,
-                        week1,
-                        minCnt2,
-                        week2,
-                        nonEffInterval,
-                        lowerVEnoneff,    # lower confidence bound to be below 'lowerVEnoneff' to meet criterion 1 for declaring non-efficacy
-                        upperVEnoneff,    # upper confidence bound to be below 'upperVEnoneff' to meet criterion 2 for declaring non-efficacy
-                        highVE,           # lower confidence bound to be above 'highVE' for declaring high efficacy
-                        stage1VE,         # lower confidence bound to be above 'stage1VE' for advancing into Stage 2
-                        lowerVEuncPower=NULL,  # lower confidence bound to be above 'lowerVEuncPower' for rejecting H0: VE<=lowerVEuncPower*100%                        
-                        alphaNoneff,      # One minus confidence level of 2-sided CI for non-efficacy monitoring
-                        alphaHigh,        # One minus confidence level of 2-sided CI for high efficacy monitoring
-                        alphaStage1,      # One minus confidence level of 2-sided CI for testing whether an arm advances into Stage 2
-                        alphaUncPower=NULL, # One minus confidence level of 2-sided CI for unconditional power to reject H0: VE<=lowerVEuncPower*100%                        
-                        estimand=c("combined", "cox", "cuminc"),
-                        post6moMonitor = FALSE,
-                        VEcutoffWeek,
-                        saveDir = NULL,
-                        verbose = TRUE){
-  estimand <- match.arg(estimand)
-  
-  upperHRnoneff <- 1 - lowerVEnoneff
-  lowerHRnoneff <- 1 - upperVEnoneff
-  stage1HR <- 1 - stage1VE
-  upperHRuncPower <- NULL
-  if (!is.null(lowerVEuncPower)){ upperHRuncPower <- 1 - lowerVEuncPower }
-  highHR <- 1 - highVE
-  
-  if (!is.null(saveDir)){
-    ## load in RData object (a list named 'trialObj' )
-    load(file.path(saveDir, dataFile))
-  } else {
-    trialObj <- dataFile
-    rm(dataFile)
-  }  
-  
-  ## check contents of 'trialData'
-  d= trialObj[["trialData"]][[1]]
-  if ( !all( c("entry","exit","event","trt") %in% names(d) ) )
-    stop("DataFrame 'd' must contain columns: entry, exit, event, trt\n")
-  
-  nTrtArms <- as.integer( trialObj$nArms - 1 )
-  nTrials <- length(trialObj[["trialData"]])
-  
-  # calculate 'null.p' the probability of being assigned vaccine considering only 1 vaccine arm
-  nPpts <- trialObj$N
-  pVaxPla <- trialObj$trtAssgnProbs[1:2]
-  nVaxPla <- pVaxPla*nPpts
-  null.p <- nVaxPla[2]/sum(nVaxPla)
-  names(null.p) <- NULL
-  
-  # calculate stopping boundaries for harm
-  if (is.null(alphaPerTest)){ alphaPerTest <- getAlphaPerTest(harmMonitorRange, null.p) }
-  harmBounds <- getHarmBound(N=harmMonitorRange[2], per.test=alphaPerTest, harmMonitorRange=harmMonitorRange,
-                             null.p=null.p, dataDir=saveDir, verbose=verbose)
-  
-  ## creates a list of length 'nTrials' each element of which is a list of 
-  ## length 'nTrtArms'
-  out <- rep( list(vector("list",nTrtArms)), nTrials )
-  
-  for (i in 1:nTrials ) {
-    
-    ## extract data for the i-th trial
-    datI <- trialObj[["trialData"]][[ i ]]
-    minEnrollTime <- min(datI$entry, na.rm=TRUE)
-    datI$futime <- datI$exit - datI$entry
-    
-    ## restrict data to first stage1 *within each ppt*
-    ## first store original (uncensored) exit time into a diff. variable
-    datI$exitUncens <- datI$exit
-    datI$eventUncens <- datI$event
-    
-    ## variables for high eff. monitoring,
-    ## highEffTime defined earlier in the input parameter
-    datI$event.H <- datI$event == 1 & ( datI$futime <= stage2 )
-    datI$exit.H  <- pmin( datI$exit, datI$entry + stage2 )
-    
-    ## variables for all other monitoring, stage 1
-    ## stage1 defined earlier in the input parameter
-    datI$event <- datI$event == 1 & ( datI$futime <= stage1 )
-    datI$exit  <- pmin( datI$exit, datI$entry + stage1 )
-    datI$futime <- datI$exit - datI$entry
-    
-    ## variables for post 6 month VE, infections occur before 6 month are censored at 6 month
-    datI$eventPost6m = ifelse (datI$futime<=VEcutoffWeek & datI$event==1, 0, datI$event)
-    
-    ## create an indicator of post-6 month events - needed for determining
-    ## when a certain pct of the infections occurred 6-months-post-trial entry
-    datI$post6mo <- (datI$futime > VEcutoffWeek)
-    
-    ## create separate set of only infection ('events')
-    eventDF <- subset(datI, event == 1)
-    
-    ## order the events by trial time at which they are observed
-    eventDF <- eventDF[order(eventDF$exit), ]
-    
-    ## Now we move to comparing each active trt arm with the placebo arm
-    for (j in 1:nTrtArms) {
-      
-      ## subset *all data* down to the two arms being compared
-      datI.j <- subset(datI, trt %in% c(0,j) )
-      
-      ## convert 'trt' to indicator variable before passing it to
-      ## 'applyStopRules' (i.e. convert the non-zero values to 1)
-      datI.j$trt <- as.integer(datI.j$trt > 0 )
-      
-      ## subset events in relevant arms: j-th active trt and placebo(trt=0)
-      E.j <- subset(eventDF, trt %in% c(0,j) )
-      nInfec <- nrow(E.j) # counts infections through 'stage1'
-      E.j$nInf= 1:nInfec
-      
-      ## data for high efficacy monitoring
-      datIH.j = subset(datI.j, select=c("entry", "exit.H", "event.H", "trt"))
-      datIH.j$event = datIH.j$event.H
-      datIH.j$exit = datIH.j$exit.H
-      
-      ## Determine the infection total (N1) that we will start monitoring
-      ## for futility at:
-      if ( nInfec >= minCnt ) {
-        
-        ## Run function that determines "N1" - the infection total (summing
-        ## over *both* trt groups) at which the first futility analysis 
-        ## will occur.
-        N1 <- getInfecCntFirstNonEff( E.j, minPercent = minPct, 
-                                      minCount = minCnt, week1 = week1, nInfecAfterwk = minCnt2, week2 = week2)
-        
-        if ( is.na(N1) ) {   ## not enough infection to trigger futility monitoring
-          N1 <- nInfec
-          doFut <- FALSE
-        } else {
-          doFut <- TRUE
-        }
-      } else {
-        ## we have less than minCnt infections in total-- we have to do testing
-        ## *something* though.  Do harm and high-eff testing since don't have
-        ## bounds for futility
-        N1 <- nInfec
-        doFut <- FALSE
-      }
-      
-      # 'highN' are infection counts that trigger high-efficacy monitoring
-      highN <- N1 + 4*nonEffInterval
-      highN.2 <- (highN + sum(datIH.j$event))/2
-      if (highN.2 > highN){ highN <- c(highN, highN.2) }
-      
-      ## Based on value of 'N1', extract bounds for efficacy, futility and harm
-      ## then apply them
-      harmBounds.j <- subset(harmBounds, N <= N1, select=c(N,V,P))
-      
-      if ( nrow(harmBounds.j) == 0 ) 
-        stop("Harm bounds have length zero - check your code.\n")
-      
-      ## Evaluate harm monitoring bounds (just based on infected ppts)
-      ## so only uses 'E.j'
-      harmRes  <- do_harm_monitoring(E.j, bounds = harmBounds.j ) 
-      
-      ## if there is indication of "harm" then need to create store output
-      ## object then move to next trial 
-      if ( harmRes$isHarm ) {
-        isHarm <- TRUE
-        harmInfecTot <- harmRes$stopInfectCnt
-        
-        harmList <-
-          list( finished = TRUE,
-                boundHit = "Harm",
-                stopTime = harmRes$stopTime - minEnrollTime,
-                stopInfectCnt = harmRes$stopInfectCnt,
-                stopInfecSplit = harmRes$stopInfecSplit,
-                totInfecCnt = nInfec )
-      } else { 
-        isHarm <- FALSE
-      }
-      
-      ## do high-efficacy monitoring next, even if we hit a 'harm' boundary.
-      ## Just in case we can hit a high eff one first.  Yes it seems crazy,
-      ## but I'm not going to rule anything out...  If we hit both then I'll
-      ## issue a warning to check things...
-      
-      ## However, if there was harm, then we only need to check for high eff
-      ## at timepoints *before* the harm bound was hit - if there are any
-      
-      if ( isHarm ) {
-        ## if there are high efficacy test times before harm time, 
-        ## do high eff monitoring 
-        # if ( nrow(highEffBounds)!= 0 ) {  
-        if ( any(highN < harmInfecTot) ) {
-          highEffRes <- applyStopRules(datIH.j,
-                                       infectionTotals = highN[highN < harmInfecTot],
-                                       boundLabel = "HighEff",
-                                       stage1HR = stage1HR,
-                                       upperHRuncPower = upperHRuncPower,
-                                       highHR = highHR,
-                                       alphaStage1 = alphaStage1,
-                                       alphaUncPower = alphaUncPower,
-                                       alphaHigh = alphaHigh, 
-                                       post6moCut=VEcutoffWeek, 
-                                       post6moMonitor = post6moMonitor,
-                                       estimand=estimand) 
-          
-          if ( isTRUE(highEffRes$boundHit == "HighEff") ) {
-            stop("We Hit both High Eff and harm bounds! ",
-                 "Please check code and bounds.\n",
-                 "Trial=",i,", Trt Arm=",j, ", ",
-                 "EffStopCnt=", highEffRes$stopInfectCnt, ", ",
-                 "HarmStopCnt=", harmInfecTot, "\n",
-                 "Harm Infec Split:", harmList$stopInfecSplit, "\n")
-          }
-        }
-        # }
-        out[[i]][[j]] <- harmList
-        next
-      } 
-      
-      ## We only reach here if no harm bounds were hit
-      
-      # if ( nrow(highEffBounds)!= 0 ) { 
-      highEffRes <- applyStopRules(datIH.j,
-                                   infectionTotals = highN,
-                                   boundLabel = "HighEff",
-                                   stage1HR = stage1HR,
-                                   upperHRuncPower = upperHRuncPower,
-                                   highHR = highHR, 
-                                   alphaStage1 = alphaStage1,
-                                   alphaUncPower = alphaUncPower,
-                                   alphaHigh=alphaHigh, 
-                                   post6moCut=VEcutoffWeek,
-                                   post6moMonitor = post6moMonitor,
-                                   estimand=estimand)
-      isHighEff <- highEffRes$boundHit == "HighEff"          
-      if (is.na(isHighEff)){ isHighEff <- FALSE }      
-      # } 
-      
-      if ( isHighEff ) {
-        heCnt  <- highEffRes$stopInfectCnt
-        
-        ## if we declare high efficacy at an infection count that is before
-        ## the first futility monitoring total, then we don't need to do
-        ## futility and declare high eff 
-        if ( heCnt < N1 || !doFut) {
-          out[[i]][[j]] <- highEffRes
-          next
-        } else {
-          ## only need to monitor for fut at "times" up until heCnt
-          seq(N1, heCnt, by =nonEffInterval)
-          futRes <- applyStopRules(datI.j,
-                                   infectionTotals = seq(N1, heCnt, by =nonEffInterval),             
-                                   boundLabel = "NonEff",
-                                   lowerHRnoneff = lowerHRnoneff, 
-                                   upperHRnoneff = upperHRnoneff, 
-                                   stage1HR = stage1HR,
-                                   upperHRuncPower = upperHRuncPower,
-                                   alphaNoneff = alphaNoneff, 
-                                   alphaStage1 = alphaStage1,
-                                   alphaUncPower = alphaUncPower,
-                                   post6moCut=VEcutoffWeek, 
-                                   post6moMonitor = post6moMonitor,
-                                   estimand=estimand)           
-          if (futRes$finished) {
-            out[[i]][[j]] <- futRes
-            next
-          } else {
-            out[[i]][[j]] <- highEffRes
-            next
-          }
-        }
-      }
-      
-      ## only reach here if 'doFut' is TRUE
-      ## get a vector of infections for nonefficacy monitoring
-      nonEffInfec = seq(N1, nInfec, by =nonEffInterval)
-      if (max(nonEffInfec) < nInfec)
-        nonEffInfec = c(nonEffInfec, nInfec)
-      
-      futRes <- applyStopRules(datI.j,
-                               infectionTotals = nonEffInfec,             
-                               boundLabel = "NonEff",
-                               lowerHRnoneff = lowerHRnoneff, 
-                               upperHRnoneff = upperHRnoneff,
-                               stage1HR = stage1HR,
-                               upperHRuncPower = upperHRuncPower,
-                               alphaNoneff = alphaNoneff,
-                               alphaStage1 = alphaStage1,
-                               alphaUncPower = alphaUncPower,
-                               post6moCut=VEcutoffWeek,
-                               post6moMonitor = post6moMonitor,
-                               estimand=estimand) 
-      out[[i]][[j]] <- futRes
-      
-      out[[i]][[j]]$firstNonEffCnt <- N1
-      
-      out[[i]][[j]]$highEffCnt <- highN
-      
-      ## add 'lastExitTime' to the object, in case we have efficacy and
-      ## the trial continues until the last person in the arm exits the study
-      out[[i]][[j]]$lastExitTime <- max( datI.j$exitUncens, na.rm=TRUE ) - minEnrollTime
-      
-      out[[i]][[j]]$altTest <- !is.null(lowerVEuncPower)
-    }
-  }
-  
-  if (verbose){
-    for (i in 1:nTrtArms) {
-      cat("Probabilities of reaching each possible conclusion:\n")
-      print(round(table(unlist( lapply( out, function(x) x[[i]]$boundHit ) ), useNA="ifany")/nTrials, 2))
-      
-      if (!is.null(lowerVEuncPower)){
-        altDetectedMatrix <- do.call("rbind",lapply(out, function(oneTrial){ oneTrial[[i]]$altDetected }))
-        # this occurs if each trial stops for potential harm, and thus the value of 'altDetected' is NULL for each trial
-        if (is.null(altDetectedMatrix)){
-          designPower <- 0
-        } else {
-          designPower <- colSums(altDetectedMatrix, na.rm=TRUE)/nTrials
-        }        
-        cat("\nUnconditional power to reject the specified null hypotheses =",round(designPower, 2),"\n\n", sep=" ")
-      }    
-    }
-  }  
-  
-  ## save monitoring output
-  if (!is.null(saveDir)){
-    saveFile <- paste("monitorTrial", substr(dataFile, 9, nchar(dataFile)-6), "_", estimand, ".RData", sep="")
-    save(out, file = file.path(saveDir, saveFile) )
-    if (verbose){ cat("Output saved in:\n", file.path(saveDir, saveFile), "\n\n") }
-  } else {
-    return(out)
-  }  
-}
-
-######################################## end of 'monitorTrial'#########################################
-
-##############
-## This function does the log rank test and estimate VE
-
-finalLogRankTest = function(datI, stage =78, NullHR, alpha=0.025) {
-   ## variables for log rank test, censor at 'stage' 
-   ## which can be stage 1 or 2 
-   datI$futime <- datI$exit - datI$entry
-   datI$event <- datI$event == 1 & ( datI$futime <= stage)
-   datI$exit  <- pmin( datI$exit, datI$entry + stage )
-   datI$futime <- datI$exit - datI$entry
-
-   ## convert 'trt' to indicator variable before calculating VE 
-   ## (i.e. convert the non-zero values to 1)
-   datI$trt <- as.integer(datI$trt > 0 )
-
-   ## create the model ('coxFormula') to be fit by coxph()
-   coxFormula <- Surv(futime, event) ~ trt
-   
-   ## run cox model
-   coxPH.i <- coxph( coxFormula, data=datI, init=log(NullHR)) 
-
-   ## extract the hazard ratio for 'trt' and store         
-   hr.i <- exp( coxPH.i$coef )
-
-   ## 95% CI for HR
-   HRci.up = exp(coxPH.i$coef+qnorm(0.975)*sqrt(coxPH.i$var))
-   HRci.lw = exp(coxPH.i$coef-qnorm(0.975)*sqrt(coxPH.i$var))
-
-   ## log rank test for stage 1
-   ## one-side p value < 0.025, efficacy o.w. nonefficacy
-   logRank <- survdiff(coxFormula, data=datI)
-   if (logRank$obs[2] <= logRank$exp[2]){ 
-     p.logRank <- (1-pchisq(logRank$chisq, 1))/2 
-   } else {
-     p.logRank <- 1 - (1-pchisq(logRank$chisq, 1))/2 
-   }
-
-   if(p.logRank < alpha && hr.i < NullHR){
-     bound <- "Eff"
-   } else {
-     bound <- "nonEff"
-   }
-   list(bound=bound, VE = 1-hr.i)
-}
-
-testVE <- function(datI, lowerVE, stage, alpha){
-  upperFR <- 1-lowerVE
-  ## variables for cumulative hazard-based Wald test, censor at 'stage' 
-  ## which can be stage 1 or 2 
-  datI$futime <- datI$exit - datI$entry
-  datI$event <- datI$event == 1 & ( datI$futime <= stage)
-  datI$exit  <- pmin( datI$exit, datI$entry + stage )
-  datI$futime <- datI$exit - datI$entry
-  
-  ## convert 'trt' to indicator variable before calculating VE 
-  ## (i.e. convert the non-zero values to 1)
-  datI$trt <- as.integer(datI$trt > 0 )
-  
-  KM <- survfit(Surv(futime, event) ~ trt, data=datI, error="greenwood")
-  KM.sum <- summary(KM)
-  # Nelson-Aalen estimates
-  na.0 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=0"]/KM.sum$n.risk[KM.sum$strata=="trt=0"])
-  varna.0 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=0"]/KM.sum$n.risk[KM.sum$strata=="trt=0"]^2)
-  na.0 <- na.0[length(na.0)]
-  varna.0 <- varna.0[length(varna.0)]        
-  na.1 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=1"]/KM.sum$n.risk[KM.sum$strata=="trt=1"])
-  varna.1 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=1"]/KM.sum$n.risk[KM.sum$strata=="trt=1"]^2)
-  na.1 <- na.1[length(na.1)]
-  varna.1 <- varna.1[length(varna.1)]
-  
-  # survival estimates
-  S.0 <- exp(-na.0)
-  varS.0 <- ifelse(is.na(varna.0), NA, exp(-2*na.0) * varna.0)
-  S.1 <- exp(-na.1)
-  varS.1 <- ifelse(is.na(varna.1), NA, exp(-2*na.1) * varna.1)
-  
-  # cumulative incidence ratio
-  F.0 <- 1 - S.0
-  F.1 <- 1 - S.1
-  FR <- F.1/F.0
-  varlogFR <- ifelse(is.na(varS.0) | is.na(varS.1), NA, varS.1/(F.1^2) + varS.0/(F.0^2))
-    
-  FRci.up <- ifelse(is.na(varlogFR), NA, exp(log(FR)+qnorm(1-alpha/2)*sqrt(varlogFR)))
-  bound <- ifelse(FRci.up < upperFR, "Eff", "nonEff")  
-  
-  return(list(bound=bound, VE=1-FR))
-}
-
-## This function calculates the probability of stopping for each bound for each arm
-sumTrialOneTrtArm =  function (nTrtArms = 2,    ## number of vaccine arms
-                      percentile.v = c(0, 0.25, 0.50, 0.75, 1),  ## vector of percentiles for infection counts
-                      RDataFile,
-                      dataDir = NULL  ## dir for simulated trials
-                               ) {
-
-## load in RData object (a list named 'out' )
-load( file.path(dataDir, RDataFile) )
-nTrials = length(out)
-
-
-## create a matrix to store the prob. for each bound 
-## 'power' =  Eff'+'HighEff'
-## 'Total' = sum of all bounds to check if it is 1
-trialRes = data.frame(matrix(0,nrow=nTrtArms, ncol=7))
-names(trialRes) = c("Harm", "nonEffInterim", "nonEffFinal", "Eff", "HighEff", "Power", "Total")
-
-## an object to store the distribution of stop infections, 
-stopNRes = data.frame(matrix(NA,nrow=nTrtArms, ncol=length(percentile.v)))
-
-## an object to store the distribution of total infections, 
-stage1NRes = data.frame(matrix(NA,nrow=nTrtArms, ncol=length(percentile.v)))
-
-## an object to store the distribution of post 6 month infections
-#post6NRes = data.frame(matrix(NA,nrow=nTrtArms, ncol=length(percentile.v)))
-
-# for each vaccine arm, the maximum number of infections across all simulated trials
-stopNmax <- numeric(nTrtArms)
-  
-for (i in 1:nTrtArms) {
-  
-   ## get the number of infections at where the arm stops
-   stopN = unlist( lapply( out, function(x) x[[i]]$stopInfectCnt ))
-   stopNmax[i] <- max(stopN, na.rm=TRUE)
-   
-   ## get the number of total infections at the end of stage1 
-   ## (i.e. all subjects complete the stage 1 follow up)
-   stage1N = unlist( lapply( out, function(x) x[[i]]$totInfecCnt))
-   
-   ## get the bounds hit when the arm stops
-   bounds <- unlist( lapply( out, function(x) x[[i]]$boundHit) )
-
-   ## get the number of infections from month 6 to end of stage 1
-   #post6N = unlist( lapply( out, function(x) x[[i]]$totInfecCntPost6))
-   post6N = unlist( lapply( out, function(x) x[[i]]$infectPost6mo))
-  
-   
-   trialRes$Harm[i] = sum(bounds=="Harm")/nTrials
-   trialRes$nonEffInterim[i] = sum(bounds=="NonEffInterim")/nTrials
-   trialRes$nonEffFinal[i] = sum(bounds=="NonEffFinal")/nTrials
-   
-   trialRes$Eff[i] = sum(bounds=="Eff")/nTrials
-   trialRes$HighEff[i] = sum(bounds=="HighEff")/nTrials
-
-   trialRes$Power[i] = trialRes$Eff[i] + trialRes$HighEff[i]
-   trialRes$Total[i] = trialRes$Power[i] + trialRes$Harm[i] + trialRes$nonEffInterim[i] + trialRes$nonEffFinal[i]
-   
-   ## get the distribution of infections at where the trial stops
-   stopNRes [i,] = quantile(stopN, prob=percentile.v)
-   
-   ## get the distribution of infections at the end of stage 1
-   stage1NRes [i,] = quantile(stage1N, prob=percentile.v)
-   
-   ## get the distribtution of infections from month 6 to the end of stage1
-  # post6NRes [i,] = quantile(post6N, prob=percentile.v)
-  
-   }
-   stopNRes$countTypes = "infectionTrialStop"
-   stage1NRes$countTypes = "infectionStage1"
-   #post6NRes$countTypes = "post6mo"
-
-   #res = rbind(stopNRes, stage1NRes, post6NRes)
-   res = rbind(stopNRes, stage1NRes)
-   names(res) = c(paste(percentile.v*100, "%", sep=""), "countTypes")
-
-   list(trialRes = trialRes, NRes = res, armMaxNinf = which(stopNmax==max(stopNmax))[1])
-}  
-
-
 censTrial <- function(dataFile,
                       monitorFile,
                       stage1,
                       stage2,
-                      saveDir = NULL,
+                      saveFile = NULL,
+                      saveDir  = NULL,
                       verbose = TRUE){
                      
-  if (!is.null(saveDir)){
-    ## load the trial data in RData object (a list named 'trialObj' )
-    load(file.path(saveDir, dataFile))
-  } else {
+  if ( is.list(dataFile) ) {
     trialObj <- dataFile
-    rm(dataFile)
-  }  
+  } else {
+    if ( !is.null(saveDir) ){
+      ## load in RData object (a list named 'trialObj' )
+      load(file.path(saveDir, dataFile))
+    } else {
+      load(dataFile)
+    }
+  }
   
   nTrials = length(trialObj[["trialData"]])  
   nTrtArms <- as.integer( trialObj$nArm - 1 )   ## one placebo arm
   
-  if (!is.null(saveDir)){
-    ## load the trial data in RData object (a list named 'trialObj' )
-    load(file.path(saveDir, monitorFile))
-  } else {
+  if ( is.list(monitorFile) ) {
     out <- monitorFile
-    rm(monitorFile)
-  }    
+  } else {
+    if ( !is.null(saveDir) ){
+      ## load in RData object (a list named 'trialObj' )
+      load(file.path(saveDir, monitorFile))
+    } else {
+      load(monitorFile)
+    }
+  }
   
   ## a matrix to store bounds results from monitoring each single arm
   boundsRes = matrix(NA, ncol=nTrtArms, nrow = nTrials)
@@ -3018,17 +2061,30 @@ censTrial <- function(dataFile,
     }      
     trialListCensor [[i]] = trialCensorI      
   }
-  
-  if (!is.null(saveDir)){
-    ## output newly censored data 
-    ## filename for censored trial data, it includes:  nTrtArms 1Vac, 2Vac, 3Vac,
-    saveFile <- paste("trialDataCens", substr(monitorFile, 13, nchar(monitorFile)), sep="")
-    ## save trial output and info on rates used
-    save(trialListCensor, file=file.path(saveDir, saveFile) )
-    if (verbose){ cat("Trial data with correct censoring saved in:\n", file.path(saveDir, saveFile), "\n\n") }
-  } else {
-    return(trialListCensor)
-  }  
+
+  ## save monitoring output
+  if ( !is.null(saveDir) ) {
+    if ( is.null(saveFile) ) {
+        if ( is.list(monitorFile) )
+          warning(
+              "The output of 'censTrial' cannot be saved to a file\n",
+              "You have not specified the argument 'saveFile', and a default\n",
+              "filename cannot be constructed when argument 'monitorFile' is ",
+              "a list.\n\n", immediate.=TRUE)
+        saveFile <- paste0("trialDataCens", 
+                           substr(monitorFile, 13, nchar(monitorFile)) ) 
+    }
+    save(trialListCensor, file = file.path(saveDir, saveFile) )
+
+    if (verbose) { 
+        cat("Trial data with correct censoring saved in:\n", 
+             file.path(saveDir, saveFile), "\n\n") 
+    }
+  } 
+
+  ## it should not be an "either/or" decision whether you save or output
+  ## the results
+  return( invisible( trialListCensor ) )
 }
 
 
@@ -3190,6 +2246,55 @@ rankTrial <- function(censFile,
   }  
 }
 
+testVE <- function(datI, lowerVE, stage, alpha){
+  upperFR <- 1-lowerVE
+  ## variables for cumulative hazard-based Wald test, censor at 'stage' 
+  ## which can be stage 1 or 2 
+  datI$futime <- datI$exit - datI$entry
+  datI$event <- datI$event == 1 & ( datI$futime <= stage)
+  datI$exit  <- pmin( datI$exit, datI$entry + stage )
+  datI$futime <- datI$exit - datI$entry
+  
+  ## convert 'trt' to indicator variable before calculating VE 
+  ## (i.e. convert the non-zero values to 1)
+  datI$trt <- as.integer(datI$trt > 0 )
+  
+  # if a vaccine regimen is highly efficacious, there will be no events observed in this arm and the Nelson-Aalen estimator will be incalculable
+  if (sum(datI[datI$trt==1,"event"])==0){
+    FR <- 0
+    bound <- "Eff"
+  } else {
+    KM <- survfit(Surv(futime, event) ~ trt, data=datI, error="greenwood")
+    KM.sum <- summary(KM)
+    # Nelson-Aalen estimates
+    na.0 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=0"]/KM.sum$n.risk[KM.sum$strata=="trt=0"])
+    varna.0 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=0"]/KM.sum$n.risk[KM.sum$strata=="trt=0"]^2)
+    na.0 <- na.0[length(na.0)]
+    varna.0 <- varna.0[length(varna.0)]        
+    na.1 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=1"]/KM.sum$n.risk[KM.sum$strata=="trt=1"])
+    varna.1 <- cumsum(KM.sum$n.event[KM.sum$strata=="trt=1"]/KM.sum$n.risk[KM.sum$strata=="trt=1"]^2)
+    na.1 <- na.1[length(na.1)]
+    varna.1 <- varna.1[length(varna.1)]
+    
+    # survival estimates
+    S.0 <- exp(-na.0)
+    varS.0 <- ifelse(is.na(varna.0), NA, exp(-2*na.0) * varna.0)
+    S.1 <- exp(-na.1)
+    varS.1 <- ifelse(is.na(varna.1), NA, exp(-2*na.1) * varna.1)
+    
+    # cumulative incidence ratio
+    F.0 <- 1 - S.0
+    F.1 <- 1 - S.1
+    FR <- F.1/F.0
+    varlogFR <- ifelse(is.na(varS.0) | is.na(varS.1), NA, varS.1/(F.1^2) + varS.0/(F.0^2))
+    
+    FRci.up <- ifelse(is.na(varlogFR), NA, exp(log(FR)+qnorm(1-alpha/2)*sqrt(varlogFR)))
+    bound <- ifelse(FRci.up < upperFR, "Eff", "nonEff")  
+  }
+  
+  return(list(bound=bound, VE=1-FR))
+}
+
   
 ###################################################
 ## This function calculates the power for head to head comparison
@@ -3283,7 +2388,16 @@ buildBounds = function(nInfec, highEffBounds) {
    list(highEffBounds=highEffBounds)            
 }
 
-VEpowerPP <- function(dataList, lowerVEuncPower, alphaUncPower, VEcutoffWeek, stage1, outName=NULL, saveDir=NULL, verbose=TRUE){
+
+VEpowerPP <- function( dataList, 
+                       lowerVEuncPower, 
+                       alphaUncPower, 
+                       VEcutoffWeek,
+                       stage1, 
+                       outName = NULL, 
+                       saveDir = NULL, 
+                       verbose = TRUE){
+
   upperFRuncPower <- 1-lowerVEuncPower
   # output list (for each censTrial output object) of lists with components 'VE' and 'VEpwPP'
   pwList <- as.list(NULL)
@@ -3381,4 +2495,2201 @@ VEpowerPP <- function(dataList, lowerVEuncPower, alphaUncPower, VEcutoffWeek, st
   } else {
     return(pwList)
   }  
+}
+
+
+## compute CIR on given dataset, at given follow-up times
+## If you want the CIR at particular 'calendar' times, you should first use
+## censorTrials to create the appropriate datasets and then apply cumIncRatio
+## to those censored trials.
+##
+cumIncRatio <- function( d, times="last", arms=c(1,0), alphaLevel=0.05, 
+                         randFraction = 0.5, ..., SIMPLIFY=TRUE) 
+{
+    ##     d: a data.frame or list of data.frames 
+    ##
+    ## times: vector that can take values:
+    ##          "last" (the default)- This directs that the CIR be provided for 
+    ##               the latest event time only.
+    ##          "all"  - directs that the CIR be provided for all event times
+    ##           (NOT IMPLEMENTED ) numeric vector - interpreted as the follow-up times for which
+    ##               the CIR should be provided
+    ##
+    ##  arms   numeric vector of length 2.   Indicates which treatment arms to 
+    ##         use in computing the CIR.  The values should be the number (or
+    ##         names, if assigned), for the treatments.  The first value of arms
+    ##         specifies the treatment to be used in the numerator of the ratio,
+    ##         and the 2nd value the treatment to be compared to (i.e. in the 
+    ##         treatment used in the denominator).
+    ##
+    ## alphaLevel: the two-sided alpha-level used to construct confidence 
+    ##             intervals for the estimate
+    ##
+    ## randFraction: the fraction of randomizations going to the particular
+    ##               treatment group, when only that treatment group and the
+    ##               placebo group are considered
+    ##
+    ##  ...    Not used at present.  Including this argument force exact 
+    ##         specification of argument 'SIMPLIFY' if user desires to change
+    ##         it (partial matching doesn't work after "..." arguments)
+    ##       
+    ##  SIMPLIFY  Logical - Should the return structure be simplified from a 
+    ##            list of data.frames to a single data.frame for cases where
+    ##            either:
+    ##              - a single data set was specified by argument 'd',  or
+    ##              - a single timepoint was specified for each dataset 
+    ##
+    ##  NOTE!! If there are no infections in one of the two groups at any of the
+    ##         time-points, an adhoc procedure will be used to compute the CI for
+    ##         the VE estimate, which is based on writing the VE as a function of
+    ##         the ratio of infections in the two groups, treating the infection
+    ##         counts as binomial, and utilizing an exact CI for the binomial 'p'
+    ##         (see notes for function 'VEci_binom')
+   
+    require(survival)
+    
+    ## force evaluation of objects so that they can be successfully passed
+    ## through to other functions
+    force( d )
+    force( alphaLevel )
+    force( randFraction )
+
+    ## survival model formula to use
+    survForm <- Surv(exit-entry, event) ~ trt
+
+    ## is 'd' is a single data.frame, convert it into a list 
+    if (is.data.frame(d))  
+      d <- list(d)
+
+
+    cir <- function(d.i, times, formula, arms, alpha, 
+                    randFraction, simplify=TRUE) {
+
+        force(d.i)
+        #force(alpha)
+
+        SurvSumm <- summary( survfit(formula, data=d.i) ) 
+        SurvSumm <- as.data.frame( SurvSumm[c("strata","time","n.event","n.risk")] )
+             
+        ## if there are no events in either group, then punt
+        ## fill in return object with NAs and return
+        if ( nrow(SurvSumm)==0 ) {
+            return( data.frame(
+                        evalTime  = NA,
+                        nEvents   =  0,
+                        nEvents.1 =  0,
+                        nEvents.2 =  0,
+                        FR        = NA,
+                        varlogFR  = NA,
+                        FR_loCI   = NA,
+                        FR_upCI   = NA,
+                        VE        = NA,
+                        VE_loCI   = NA,
+                        VE_upCI   = NA ) )
+        }
+
+        strataA <- ( SurvSumm$strata == paste0("trt=", arms[1]) )
+        timesA  <- SurvSumm$time[strataA]
+        trtA    <- SurvSumm[ strataA , c("n.event", "n.risk")]
+
+        strataB <- ( SurvSumm$strata == paste0("trt=", arms[2]) )
+        timesB  <- SurvSumm$time[strataB]
+        trtB    <- SurvSumm[ strataB , c("n.event", "n.risk")]
+
+        NelsAal.A <- cumsum( trtA$n.event / trtA$n.risk )
+        NelsAal.B <- cumsum( trtB$n.event / trtB$n.risk )
+
+        varNelAal.A <- cumsum( trtA$n.event / trtA$n.risk^2 )
+        varNelAal.B <- cumsum( trtB$n.event / trtB$n.risk^2 )
+
+        F.A <- 1 - exp(-NelsAal.A)
+        F.B <- 1 - exp(-NelsAal.B)
+
+        varF.A <- exp(-2*NelsAal.A)*varNelAal.A
+        varF.B <- exp(-2*NelsAal.B)*varNelAal.B
+
+        ## Determine times at which to compute CIR, if not provided
+        if ( times %in% c("last", "all")  ) {
+
+            EventTimes <- sort( unique( SurvSumm$time ) )
+            nTimes <- length(EventTimes)
+
+            if (times == "all") {
+                whichTimes <- 1:nTimes
+            } else {
+                whichTimes <- nTimes
+            }
+            times <- EventTimes[ whichTimes ]
+        } 
+
+        ## The 'cut' function (with labels=FALSE) returns the number of the 
+        ## interval (defined by 'breaks') into which each of the 'times' falls
+        ##
+        ## For the breaks, we need to add "0" as a lower bound in case someone
+        ## specifies a time before the first event.  This extra interval throws
+        ## off the previously 1:1 correspondence with the F.A, varNelAal.A, etc.
+        ## Therefore, before using the objects created using 'cut' for 
+        ## subsetting we'll prepend the vectors being subsetted (see usage in
+        ## code blocks following the one immediately below)
+        interval.A <- cut( times, breaks=c(0, timesA, Inf), 
+                           include.lowest=TRUE, right=FALSE, labels=FALSE) 
+        interval.B <- cut( times, breaks=c(0, timesB, Inf), 
+                           include.lowest=TRUE, right=FALSE, labels=FALSE) 
+
+        ## values of F.A and F.B and the times provided by 'times'
+        F.A_times <- c(0, F.A)[interval.A]
+        F.B_times <- c(0, F.B)[interval.B] 
+
+        FR_times    <- F.A_times/F.B_times
+        logFR_times <- log( FR_times )
+
+        ## pull out values needed for computing variance of logFR_times
+        varF.A_times <- c(NA,  varF.A)[interval.A]
+        varF.B_times <- c(NA,  varF.B)[interval.B]
+
+        ## compute variance of logFR
+        varlogFR_times <- varF.A_times/(F.A_times^2) + 
+                            varF.B_times/(F.B_times^2)
+
+        ## CI for logFR_times (matrix form)
+        logFR_times_loCI <- logFR_times - qnorm(1-alpha/2)*sqrt(varlogFR_times)
+        logFR_times_upCI <- logFR_times + qnorm(1-alpha/2)*sqrt(varlogFR_times)
+        
+
+        ## I can't see how this next line of code could be necessary, but
+        ## haven't had time to test thoroughly to ensure that it's not,
+        ## so it remains for now...
+        nas <- ( is.na(F.A_times) | is.na(F.B_times) )
+        if ( any( nas ) )
+            varlogFR_times[ nas ] <- NA
+
+        ## create data.frame containing: point estimate, variance, 
+        ## confidence interval, etc.
+        outObj <-
+            data.frame(
+                evalTime  = times,
+                nEvents   = NA,
+                nEvents.1 = c(0, cumsum(trtA$n.event))[interval.A],
+                nEvents.2 = c(0, cumsum(trtB$n.event))[interval.B],
+                FR        = FR_times,  
+                varlogFR  = varlogFR_times,
+                FR_loCI   = exp( logFR_times_loCI ),
+                FR_upCI   = exp( logFR_times_upCI )
+              )
+
+        ## fill in remaining components 
+        outObj <- transform( outObj, 
+                      nEvents = nEvents.1 + nEvents.2,
+                      VE      = 1 - FR,   
+                      VE_loCI = 1 - FR_upCI,
+                      VE_upCI = 1 - FR_loCI )
+
+        ## Check for 0 counts in groups. If either group has 0 infections
+        ## then we will use 'VEci_binom' to compute a CI for the VE and
+        ## fill it into 'outObj'.  
+        if ( any( ind <- ( outObj$nEvents.1==0 | outObj$nEvents.2==0 ) )) {
+
+            ci <- VEci_binom( 
+                      N  = outObj$nEvents[ind],  
+                      Nv = outObj$nEvents.1[ind],
+                      randFraction = randFraction,
+                      alpha = alpha )
+
+            outObj$VE_loCI[ind] <- ci[ ,1]
+            outObj$VE_upCI[ind] <- ci[ ,2]
+
+            outObj$FR_loCI[ind] <- 1 - outObj$VE_upCI[ind]
+            outObj$FR_upCI[ind] <- 1 - outObj$VE_loCI[ind]
+        } 
+        return( outObj )
+    }
+
+    force(times)
+
+    ## Apply our 'cir' function to the list of datasets 'd', and return the list
+    cirList <- lapply(d, FUN=cir, times=times, arms=arms, formula=survForm,
+                      alpha=alphaLevel, randFraction = randFraction)
+
+    ## If SIMPLIFY is turned off, return object and exit
+    if ( !SIMPLIFY ) 
+       return( cirList ) 
+
+    ## If a single trial was passed via 'd' then cirList is a length 1 list
+    ## containing a data.frame -  we remove it from the data.frame
+    if (length(d) == 1) 
+       return( cirList[[1]] )
+
+    ## if a single time is provided, then rbind together all the one-row
+    ##  data.frames into a single one
+    if (length(times) == 1 && times != "all") 
+       return( do.call(rbind, cirList) )
+
+    ## if none of the criteria above were satisfied
+    return( cirList ) 
+}
+
+
+
+
+## computes unadjusted hazard ratio and CI on given dataset(s)
+##
+## Not generic at all right now, assumes that:
+##   - data comes from a std. trial data.frame
+##   - that formula is: Surv(exit-entry, event) ~ trt
+##
+## Not sure how to generalize it as not sure where/how I'd use a general version
+
+coxHR <- function(d, arms=c(1,0), alphaLevel=0.05, randFraction = 0.5,
+                   ..., SIMPLIFY=TRUE)
+{
+    ##
+    ##  d      a data.frame or list of data.frames to be used for fitting the model
+    ##
+    ##  arms   vector of length 2.   Indicates which treatment arms to use in
+    ##         computing the hazard ratio.  The values should be the numbers (or
+    ##         names, if assigned), for the treatments.  The first value of arms
+    ##         specifies the treatment to be used in the numerator of the ratio,
+    ##         and the 2nd value the treatment to be compared to (i.e. in the 
+    ##         treatment used in the denominator).
+    ##
+    ## alphaLevel: the two-sided alpha-level used to construct confidence 
+    ##             intervals for the estimate
+    ##
+    ## survForm: the formula to be used in survfit() to create summary info
+    ##           used to compute the estimator.
+    ##
+    ## randFraction:  the fraction of randomization going to the particular
+    ##                treatment group, when only that treatment group and the
+    ##                placebo group are considered
+    ##
+    ##  ...    Not used at present.  Including this argument force exact 
+    ##         specification of argument 'SIMPLIFY' if user desires to change
+    ##         it (partial matching doesn't work after "..." arguments)
+    ##
+    ##  SIMPLIFY  Logical - Should the return structure be simplified from a 
+    ##            list of data.frames to a single data.frame?
+    ##
+   
+    require(survival)
+    survForm <- Surv(exit-entry, event) ~ trt
+    
+    ## force evaluation of objects so that they can be successfully passed
+    ## through to other functions
+    force(d)
+    force(arms)
+    force(randFraction)
+
+    ## is 'd' is a single data.frame, convert it into a list 
+    if (is.data.frame(d))  
+      d <- list(d)
+
+
+    ## restrict data to specified arms, if necessary 
+    d <- lapply(d, function(ds,vals) ds[ ds$trt %in% vals, ], vals=arms )
+
+    ## applies coxph to a single dataset
+    cph <- function(d.i, formula, alpha, randFraction) {
+        force(d.i)
+        coxPH <- coxph(formula, data=d.i)
+
+        ## extract the hazard ratio for 'trt' and store
+        ## (note: all 'as.vector' calls are used to strip off names since they can
+        ## cause the code to malfunction (e.g. in creation of data.frame - names
+        ## override the names I'm trying to give the components!)
+        logHR      <- as.vector( coef(coxPH) )
+        varlogHR   <- as.vector( vcov(coxPH) )
+        logHR_loCI <- logHR - qnorm(1 - alpha/2)*sqrt(varlogHR)
+        logHR_upCI <- logHR + qnorm(1 - alpha/2)*sqrt(varlogHR)
+
+
+        ## next code chunk is ancillary to the estimate, used only to
+        ## retrieve info on number of infections in the groups
+        SurvSumm <- summary( survfit(formula, data=d.i) )
+        SurvSumm <- as.data.frame( SurvSumm[c("strata","time","n.event")] )
+
+        ## if there are no events in either group, then punt.
+        ## Fill in return object with NAs (mostly) and return
+        if ( nrow(SurvSumm)==0 ) {
+            return( data.frame(
+                        nEvents   =  0,
+                        nEvents.1 =  0,
+                        nEvents.2 =  0,
+                        HR        = NA,
+                        varlogHR  = NA,
+                        HR_loCI   = NA,
+                        HR_upCI   = NA,
+                        VE        = NA,
+                        VE_loCI   = NA,
+                        VE_upCI   = NA ) )
+        }
+
+        eventsByStrata <- split( SurvSumm, 
+                                 factor( SurvSumm$strata,
+                                         levels=paste0("trt=", arms ))) 
+
+        events <-  sapply( eventsByStrata,
+                           function(x) {
+                             if (nrow(x)>0)
+                               cumsum(x$n.event)[nrow(x)]
+                             else  0 } )
+
+        ## create data.frame containing: point estimate, variance, 
+        ## confidence interval, etc.
+        outObj <-
+            data.frame(
+                nEvents   = sum(events),
+                nEvents.1 = events[1],
+                nEvents.2 = events[2],
+                HR        = exp(logHR),
+                varlogHR  = varlogHR,
+                HR_loCI   = exp( logHR_loCI ),
+                HR_upCI   = exp( logHR_upCI ) 
+            )
+
+        ## fill in remaining components 
+        outObj <- transform( outObj,
+                      VE      = 1 - HR,
+                      VE_loCI = 1 - HR_upCI,
+                      VE_upCI = 1 - HR_loCI )
+
+        ## Check for 0 counts in groups. If either group has 0 infections
+        ## then we will use 'VEci_binom' to compute a CI for the VE and
+        ## fill it into 'outObj'.  
+        if ( any( ind <- ( outObj$nEvents.1==0 | outObj$nEvents.2==0 ) )) {
+
+            ci <- VEci_binom(
+                      N  = outObj$nEvents[ind],
+                      Nv = outObj$nEvents.1[ind],
+                      randFraction = randFraction,
+                      alpha = alpha )
+
+            outObj$VE_loCI[ind] <- ci[ ,1]
+            outObj$VE_upCI[ind] <- ci[ ,2]
+
+            outObj$HR_loCI[ind] <- 1 - outObj$VE_upCI[ind]
+            outObj$HR_upCI[ind] <- 1 - outObj$VE_loCI[ind]
+        }
+
+        return( outObj )
+    }
+
+    ## Apply our 'cph' function to the list of datasets 'd', and return the list
+    cphList <- lapply(d, FUN=cph, formula=survForm, alpha=alphaLevel,
+                      randFraction = randFraction)
+
+    ## If SIMPLIFY is turned off, return object and exit
+    if ( !SIMPLIFY ) 
+       return( cphList ) 
+
+    ## If a single trial was passed via 'd' then cphList is a length 1 list
+    ## containing a data.frame - we remove it from the list 
+    if (length(d) == 1) 
+       return( cphList[[1]] )
+
+    ## else if multiple trial were provided, then rbind together the one-row
+    ##  data.frames into a single one
+    return( do.call(rbind, cphList) )
+}
+
+
+
+## This function implements a "final" analysis, just based on stage 1 data, 
+## which will be used for two purposes:
+##
+##   (1) to perform an "End-of-Stage-1" test, when the final ppt. completes
+##       their stage 1 follow-up (if that timepoint is reached without
+##       encountering a stopping boundary first).  This test will determine
+##       whether the trial continues to stage2, and also whether there is 
+##       efficacy at the level of the design alternative (finalVE)
+##
+##   (2) to perform the "last-stage1-analysis" in cases when a stopping boundary
+##       is hit before the end-of-stage 1 is reached.  Because this test is to
+##       determine if there is evidence of efficacy, there is no need to do the
+##       test if stopping was for harm or nonEfficacy.  So we do this test only
+##       if we stop for highEff during stage 1.
+finalStage1Test <- function(dat, 
+                       analysisType=c("final","stopTime"), 
+                       stage1VE=NULL,
+                       lowerVE,
+                       alphaLevel, 
+                       estimand=c("cox","cuminc","combined"),
+                       time=NULL, 
+                       boundLabels=c("Eff", "NonEffFinal"),
+                       randFraction = null.p )
+
+## Arguments:
+##   dat            a trial or list of trials
+##
+##   analysisType   Which type of analysis should be done
+##
+##   stage1VE       Used to determine whether the trial should move to stage 2.
+##                  Only applicable if analysisType == "Final".
+##                  The lower bound of the VE confidence interval must exceed
+##                  this value.  (Minimal VE threshhold for further study)
+##
+##   lowerVE        vector of VE values to test (using stage 1 data only) when
+##                  the trial stops, either by hitting a bound of by reaching 
+##                  the end of stage 1.
+##
+##   alphaLevel     alpha level to use in constructing the confidence interval
+##                  for the VE estimate that will be compared to 'lowerVE' and
+##                  (if applicable) 'stage1VE'.
+##
+##   estimand       which estimand(s) to use to estimate VE
+##
+##   time           (Only used if analysisType == "stopTime") 
+##                  The calendar time at which to censor the stage1 data prior
+##                  to estimating VE and comparing to 'finalVE'
+##
+##   boundLabels    (Used only if analysisType == "final").  
+##                  These are values to return for the result component 
+##                  "boundHit", when the comparison to 'lowerVE' is TRUE,
+##                  or FALSE respectively.  
+##                  Call the lower bound for the CI of the VE estimates 'loCI':
+##                     if loCI > lowerVE for *all* estimands specified,                
+##                          then boundHit <- boundLabels[1]
+##                     if loCI <= lowerVE, for *any* estimand specified
+##                          then  boundHit <-  boundLabels[2]
+##
+##  randFraction    Randomization fraction for current treatment group relative
+##                  to that of the placebo group.  This information is used only
+##                  in the case of having 0 infections in one of the groups
+##                  (active or placebo), so that a proper confidence interval 
+##                  cannot be constructed.  In that case, we pretend that our
+##                  VE estimate is:  1 - (Nvacc/Nplac)*(Rp/Rv)
+##                  and that Nvacc ~ binomial(Nvacc+Nplac, p).
+##                  We compute an exact CI for 'p' based on the Clopper-Pearson
+##                  method and use it to compute a CI for VE as just defined.
+{
+    force( randFraction )
+
+    analysisType  <- match.arg(analysisType)
+    estimand      <- match.arg(estimand)
+
+    ## Set indicator of end of stage 1 analysis
+    EndStg1 <- (analysisType == "final")
+
+    ## force evaluation of a few arguments
+    force(alphaLevel)
+    force(lowerVE)
+    if ( !missing(stage1VE) ) 
+        force(stage1VE)
+    if ( !missing(time) ) 
+        force(time)
+
+    ## TEMP CODE - need to modify monitorTrials to specify a specific estimand
+    ## (not "combined") to use for the final stage 1/stop-time  analysis
+    if (estimand == "combined")
+       estimand <- "cuminc"
+
+    ## set indicators for estimation types to use
+    cox  <- (estimand %in% c("cox",   "combined"))
+    cir  <- (estimand %in% c("cuminc","combined"))
+
+    if (analysisType=="stopTime") {
+        if (is.null(time)) {
+            stop("Argument 'time' must be specified when analysisType='stopTime'\n")
+        }
+        ## censor data to 'time'
+        dat <- censorTrial(dat, times=time, timeScale="calendar")
+    }
+
+
+    if (cir) {
+        cumIncOut <- cumIncRatio( dat, 
+                         times="last", 
+                         alphaLevel = alphaLevel,
+                         randFraction = randFraction )
+
+        CIRobj <- transform( cumIncOut,
+                      infectTotal = nEvents,
+                      infectSplit = paste0("Pl:Vx =", nEvents.2, ":", nEvents.1),
+                      nPlac       = nEvents.2,
+                      nVacc       = nEvents.1,
+                      VE_CIR      = VE,
+                      VE_CIR_loCI = VE_loCI,
+                      VE_CIR_upCI = VE_upCI )
+
+        if (EndStg1) {
+            ## set efficacy result based on lower bound of CI, unless we have no
+            ## CI because we have no infections in vacc. group, then set to TRUE
+            effResult <- ifelse(CIRobj$VE_loCI > stage1VE, TRUE, FALSE )
+        }
+
+        altDetected_CIR <- ifelse(CIRobj$VE_loCI > lowerVE, TRUE, FALSE)
+
+             
+        ## subset to retain only the var.s created above
+        CIRobj <- CIRobj[,c("infectTotal", "infectSplit", "nPlac", "nVacc",
+                           "VE_CIR", "VE_CIR_loCI", "VE_CIR_upCI") ]
+    }
+
+    if (cox) {
+        coxHRout <- coxHR( dat, 
+                           alphaLevel = alphaLevel,
+                           randFraction = randFraction )
+
+        CoxObj <- transform( coxHRout,
+                      infectTotal = nEvents,
+                      infectSplit = paste0("Pl:Vx =", nEvents.2, ":", nEvents.1),
+                      nPlac       = nEvents.2,
+                      nVacc       = nEvents.1,
+                      VE_Cox      = VE,
+                      VE_Cox_loCI = VE_loCI,
+                      VE_Cox_upCI = VE_upCI)
+
+        if (EndStg1) {
+            ## set efficacy result based on lower bound of CI, unless we have no
+            ## CI because we have no infections in vacc. group, then set to TRUE
+            effResult <- ifelse(CoxObj$VE_loCI > stage1VE, TRUE, FALSE )
+        }
+
+        altDetected_Cox <- ifelse( CoxObj$VE_loCI > lowerVE, TRUE, FALSE )
+
+
+        ## subset to retain only the var.s created above
+        CoxObj <- CoxObj[,c("infectTotal", "infectSplit", "nPlac", "nVacc",
+                           "VE_Cox",     "VE_Cox_loCI", "VE_Cox_upCI") ]
+    }
+
+    if (cox && cir) {
+        altDetected <- altDetected_CIR & altDetected_Cox
+        ## cbind the output together, dropping duplicated columns
+        summObj <- cbind( CIRobj, 
+                          CoxObj[, !names(CoxObj) %in% names(CIRobj) ] ) 
+    } else {
+        if (cox) {
+            altDetected <- altDetected_Cox
+            summObj     <- CoxObj
+        } else {
+            altDetected <- altDetected_CIR
+            summObj     <- CIRobj
+        }
+    } 
+
+    names( altDetected ) <- as.character( lowerVE )
+
+    if ( EndStg1 ) {
+        
+        ## using 'as.vector' to strip the names off of 'altDetected' so they don't
+        ## transfer onto 'boundHit;
+        boundHit <- ifelse(effResult, boundLabels[1], boundLabels[2])
+
+        outList <- 
+            list( boundWasHit = TRUE,
+                  boundHit = boundHit,
+                  boundType = "FinalStage1",
+                  ## only assign stopTime for nonefficacy result
+                  stopTime = ifelse(effResult, NA, max( dat$exit)),
+                  stage1summ = summObj, 
+                  altDetected = altDetected )
+    } else {
+        ## this analysis comes after a bound was already hit, so we're just 
+        ## reporting out on the last analysis.  So we won't output things
+        ## like 'boundHit', and stopTime, as those have already been defined
+        ## We just output the summaryObject with estimates and CIs and 
+        outList <- list( stage1summ = summObj,
+                         altDetected = altDetected )
+    }
+    return( outList )
+}
+
+
+## This function is used to create a confidence interval for the VE when
+## we have 0 infections in either the active or placebo groups. It is
+## *ONLY* for that case - no other.  It is used because we cannot construct
+## a 'usual' CI in this setting.
+##
+## The approach is based off estimating VE as:   
+##   VE = 1 - (Nv/Np)*(Rp/Rv)  
+##      with Nv, Np being infection counts in the vacc. and plac. groups
+##      and Rp, Rv the randomization fractions of those grps. 
+##
+## We treat Nvacc as ~ binomial(N, p), where N = (Nv+Np),  and compute an
+## exact confidence interval for p using the Clopper-Pearson approach.
+## We then use that CI to derive a CI for VE, based on the equation given
+## a few lines above here.
+##
+##  N         = total infections 
+##  Nv        = number of infections in vaccinee group
+##  alpha     = the 2-sided confidence level
+##  randFraction = randomization fraction of the current active trt group relative
+##              to active + placebo.
+## 
+VEci_binom <- function(N, Nv, randFraction=0.5, alpha=0.05) {
+
+    if ( any( (Nv != 0  &  Nv != N) ) )
+        stop("This function is only usable when Nv equals 0 or N \n\n")
+    
+    L <- length( N )
+    lowerBound <- numeric( L )
+    upperBound <- numeric( L )
+
+    ## logical indicators of 0 and N infections
+    ind0 <- (Nv == 0) 
+    indN <- (Nv == N)
+
+    ## Bounds first for binomial 'p'
+    lowerBound[ ind0 ] <- 0
+    upperBound[ ind0 ] <- 1 - (alpha/2)^(1/N)
+
+    lowerBound[ indN ] <- (alpha/2)^(1/N)
+    upperBound[ indN ] <- 1 
+ 
+    ## This is the reversed CI for binomial 'p', the make
+    ## next set of computations simpler.
+    revCI <- cbind(upperBound, lowerBound)
+
+    ## Then transform it to get CI for VE
+    ## First re-write VE equation as:  
+    ##   VE = 1 - (Nv/N)/((N-Nv)/N)*Rp/Rv =   1 - [p/(1-p)] * Rp/Rv
+    ## 
+    ## then let (pLL, pUL) = lower-limit and upper-limit of the CI for 'p'
+    ## and note:
+    ##  since - p/(1-p) is decreasing in 'p', the lower/upper CI limits 
+    ##    for the CI of -p/(1-p) will be: (-pUL/(1-pUL), -pLL/(1-pLL))  
+    ##    and the CI for VE comes by direct manipulation of this
+   
+    ci <- cbind(lowerBound, upperBound)
+
+    VE_ci <- 1 - revCI/(1-revCI) * (1-randFraction)/randFraction
+
+    return( VE_ci )
+}
+
+
+## Function that, given a vector of infection counts and a simulated trial 
+## dataset 'd' will return the calendar times at which those infection counts
+## were reached.  The times are needed for censoring the data prior to 
+## computing various statistics for, e.g. for performing non-efficacy or 
+## high-efficacy analyses.
+
+
+#* Suggestion to think about:
+#*    can we unlink 'cnts' from length of d?  Then we'd be able to 
+#*    allow for 'cnts' to be unspecified so that we can get the times 
+#*    for every infection in d (or d[[j]])
+#*
+#*    Not sure what bad things can happen if we allow that...
+#*    or if it makes one of the other usages confusing... 
+
+
+## Arguments:
+##
+##    d  either a trial data.frame (i.e. data from a single trial) or a list
+##       of such data.frames (each representing a trial)
+##
+## cnts: integer vector giving the infection counts (summed over the treatment
+##       arms given by argument 'arms') for which associated calendar times
+##       are desired. 
+## 
+##       If 'cnts' is a vector, the values will be applied to every trial
+##
+##       If 'cnts' is a list, then each component should contain a vector 
+##       of counts for a different trial.  i.e. cnts[[j]] will contain the
+##       counts for which we want times for trial d[[j]].  Because of this
+##       relationship between 'd' and 'cnts', both must be the same length.
+##
+## arms:  The treatment arm codes for the ppt.s whose infections should be 
+##        counted when determining the infection totals.  If unspecified
+##        all data is used (i.e. arms are not considered)
+##
+##  ... :  Not used.  Purpose is to force exact specification of arguments
+##         that follow it.
+##
+## SIMPLIFY:  Logical value indicating whether the function should return 
+##            a vector rather than a length 1 list containing the vector
+##            when 'd' is a single data.frame (or list of length 1)
+##
+##
+## Return Value:
+##
+##   A list the same length as 'd' (length=1 if 'd' is a data.frame), each
+##   component of which contains a vector of calendar times at which the 
+##   associated infection totals (given by, or in 'cnts') is reached.
+##
+
+##getInfectionTimes <- function( d , cnts, arms=c(0,1), ..., SIMPLIFY=TRUE)
+getInfectionTimes <- function( d , cnts, arms=NULL, ..., SIMPLIFY=TRUE)
+{
+
+  ## if 'cnts' is a list, then 'd' must be too
+  if (is.list(cnts) && (!is.list(d) || length(d)!=length(cnts)) )
+      stop("When 'cnts' is a list, then 'd' must also be a list and their",
+           " lengths\n", "must be the same\n\n")
+
+  ## coerce 'cnts' to be integer valued (within the list, if present)
+  cnts <- if (is.list(cnts)) {
+              lapply(cnts, as.integer)
+          } else {
+              as.integer(cnts)
+          } 
+  ## place 'd' inside a list if it's just a single data.frame
+  if ( is.data.frame(d) )
+     d <- list( d )
+
+  ## define function to 'apply' to all datasets (lapply or mapply)
+  laf <- function(x, cnt, arms=NULL) {
+
+      cnt.int <- as.integer(cnt)
+      if ( is.null(arms) ) {
+          eventTimes <- sort( x$exit[ x$event == 1 ])
+      } else {
+          eventTimes <- sort( x$exit[ x$trt %in% arms & x$event == 1 ])
+      }
+
+      ## restrict to counts that were attained in this trial
+      cnt.obt <- cnt.int[ cnt.int <= length(eventTimes) ]
+
+      ## return times corresponding to the count totals obtained
+      eventTimes[ cnt.obt ]  
+  }
+
+  Times <- if (is.list(cnts)) {
+              mapply(FUN=laf, x=d, cnt=cnts)
+          } else {
+              lapply(X=d, FUN=laf, cnt=cnts)
+          }
+
+  if (length(d) > 1 || !SIMPLIFY) { 
+      return( Times )
+  } else {
+      return( Times[[1]] )
+  }
+}
+
+
+
+## Censors trial data.frames to specified times:
+##
+##   d:  either a trial data.frame (i.e. data from a single trial) or a list
+##       of such data.frames (each representing a trial)
+##
+##  times: gives the time(s) to use for censoring.  
+## 
+##         If 'times' is a vector, then the following behavior will be obtained:
+##            every trial will be censored using every value of 'times'.
+##
+##         If 'times' is a list, then it must have length equal to length(d),
+##         and the resultant behavior will be to apply the times from times[[j]]
+##         to trial d[[j]] - i.e. each component of 'times' specifies a set of
+##         times to use in censoring a particular trial.
+## 
+##  arms:  UNDER CONSTRUCTION - NOT CURRENTLY IN USE - WILL BE IGNORED.
+##         vector of codes of the treatment arms that should be censored.
+##         Default is to censor all arms.
+##
+##  timeScale:  Specifies whether the censoring should be done on calendar time 
+##         or follow-up time - i.e. whether the values in 'times' should be taken
+##         as time since the study began (calendar time), or the time since each
+##         participant enrolled (follow-up time).
+##
+##  type:  Type of censoring to perform. Possible values are 'right' and 'left'
+##         The default is 'right'.  Right censoring discards data accrued after
+##         a given time, whereas left censoring discards data accrued *before*
+##         a given time.  Interval censoring can be achieved by employing the
+##         function twice, once with right censoring and once with left. 
+##
+##   ...:  Not currently used
+##
+##  SIMPLIFY:  Indicates whether a data.frame should be returned instead of a 
+##             list of length 1, in the case where a single data.frame (or list 
+##             length 1) and single time are provided by the user.
+##             Or, in the case of mulitple trials and a single time per trial,
+##             whether the nested list structure should be simplified to a 
+##             un-nested list (i.e. the inner list be "unlist()ed")
+
+censorTrial <- function(d, times, arms=NULL, timeScale=c("calendar","follow-up"),
+                        type=c("right","left"), ..., SIMPLIFY=TRUE)
+{
+    ## To handle the case when 'd' is a list of trials, we force it to always
+    ## be a list (i.e. we coerce to list when needed)
+    if ( is.data.frame(d) )
+        d <- list(d)
+
+    ## determine how many trials we're censoring
+    nTrials <- length(d)
+    nTimes  <- length(times) 
+
+    if (is.list(times) && nTimes != nTrials)
+      stop("Argument 'times' is a list and has length different than 'd' - ",
+           "this is not permitted\n")
+
+    ## if 'arms' has been specified, subset data using it
+    #if (!is.null(arms)) {
+    #  d <- lapply(d, function(x) x[x$trt %in% arms, ] )
+    #}
+             
+    timeScale <- match.arg(timeScale)
+    type <- match.arg(type)
+
+
+    ### Define 4 censoring functions, for all combinations of type and timeScale
+
+    ## (1) function to right censor a single trial at a single calendar time
+    right.censor.Calendar <- function(trial, time) {
+          ## restrict to those enrolled before 'time'
+          cens <- trial[trial$entry<time, ]
+
+          ## censor events that occur after 'time'
+          cens$event[ cens$exit > time ] <- 0
+
+          ## alter 'exit' time to reflect censoring
+          cens$exit <- pmin( cens$exit, time)
+
+          return(cens)
+    }
+
+    ## (2) function to left censor a single trial at a single calendar time
+    left.censor.Calendar <- function(trial, time) {
+          ## restrict to those still active at time 'time'
+          cens <- trial[trial$exit > time, ]
+
+          ## alter 'entry' time to reflect censoring, it must be >= time
+          cens$entry <- pmax( cens$entry, time)
+
+          return(cens)
+    }
+
+    ## (3) function to right censor a single trial at a single follow-up time
+    ## follow-up time = (exit_time - entry_time)
+    right.censor.Followup <- function(trial, time) {
+
+          ## No exclusion of participants
+          cens <- trial
+
+          ## censor events with follow-up time greater than 'time'
+          cens$event[ (cens$exit - cens$entry) > time ] <- 0
+
+          ## alter 'exit' time to reflect censoring
+          cens$exit <- pmin( cens$exit, cens$entry + time ) 
+
+          return(cens)
+    }
+
+    ## (4) function to left censor a single trial at a single follow-up time
+    left.censor.Followup <- function(trial, time) {
+          ## restrict to participants with at least 'time' followup
+          cens <- trial[ (trial$exit - trial$entry) > time, ]
+
+          ## -- not sure that we should do this -- leave it out for now...
+          ## alter 'entry' time to reflect censoring (move up by 'time') to
+          ## reduce FU by 'time' 
+          ## cens$entry <- cens$entry + time 
+
+          return(cens)
+    }
+    
+    ## choose appropriate censoring function
+    censFunc <- switch( type, 
+                  "right"= switch(timeScale, "calendar"=right.censor.Calendar,
+                                    "follow-up"=right.censor.Followup, NA ),
+                  "left" = switch(timeScale, "calendar"=left.censor.Calendar,
+                                    "follow-up"=left.censor.Followup, NA ) )
+
+
+    ## apply censoring
+    if (!is.list(times)) {
+        ## apply all times to all trials.  This returns a nested list:
+        ##   outer list over trials, inner list over times within trial
+        cens <- lapply(d, FUN = function(d.i, time, cenFunc) 
+                         lapply(X=time, FUN=cenFunc, trial=d.i),
+                       time=times, cenFunc=censFunc )
+    } else {
+        ## otherwise if 'times' is a list (same length as 'd') do: 
+        cens <- mapply(FUN= function(d.i, time, cenFunc) 
+                          lapply(X=time, FUN=cenFunc, trial=d.i ),
+                       d.i=d, time=times, 
+                       MoreArgs=list(cenFunc=censFunc),
+                       SIMPLIFY=FALSE, USE.NAMES=FALSE)
+    }
+
+  if ( SIMPLIFY ) {
+    ## - If the output is only one data.frame, remove it from its list,
+    ## - If the output is one trial at mulitple times, remove the outer list.
+    ## - If the output is multiple trials each at a single time, then remove
+    ##     the inner list.
+    ## [note: 'unlist()' not used as it strips off the data.frame attribute ]
+
+    if (nTrials==1 && nTimes==1)
+        return( cens[[1]][[1]] )
+
+    if (nTrials==1 && nTimes>1)
+        return( cens[[1]] )
+
+    if (nTrials>1 && (nTimes==1 || 
+          (is.list(times) && all(unlist(lapply(times,length))==1)) ) )
+        return( lapply(cens, function(x) x[[1]] ) )
+
+    return( cens )
+
+  } else {
+    return ( cens )
+  }
+}
+
+
+
+#################   Begin code for monitorTrial  ################
+
+## Some arguments described just below the argument list 
+monitorTrial <- 
+    function(
+        dataFile,
+        stage1,
+        stage2,
+
+        ## range over which to "spend" the type-I error specified in argument
+        ## 'harmMonitorRange'.  It should be a vector of length 2 giving the 
+        ## (start, stop) infection-count range over which the type-I error 
+        ## will be spent.  Please note that this argument does *NOT* dictate
+        ## when harm monitoring will END.  The range dictates when it will
+        ## START, and over what range the type-I error will be spread.  If
+        ## you plan to use nonEffStartMethod "FKG" or "fixed" then the 
+        ## 'stop' value of the range, if provided by the user, will not be
+        ## used and need not be specified. It may also be replaced with an NA.
+
+        ## bounds are created.  The 'start' component will determine when 
+        ## harm monitoring beings.
+        harmMonitorRange, 
+
+        ## Total Type I error for potential harm monitoring (per vacc. arm)
+        harmMonitorAlpha=0.05,
+
+        ## 'harmMonitorContol' is a list containing other parameters controlling 
+        ##    the harm monitoring. Currently the only one used in 'maxCnt'.  This
+        ##    *MUST* be specified and represesents the set of infection counts for
+        ##    which harm bounds will be constructed.  Harm monitoring ends when
+        ##    'maxCnt' has been exceeded, whether or not you've reached the
+        ##    criteria for initiaton of non-efficacy monitoring, so you should: 
+        ##    (a) choose a nonEff start method that guarantees starting
+        ##        at/before 'maxCnt', or
+        ##    (b) choose maxCnt to be a value larger than you're non-efficacy
+        ##        starting count will ever be (maybe use 2 or 3 times the 
+        ##        upper range for harm monitoring (harmMonitorRange[2]).
+        ##  If maxCnt is left unspecified, the default value of 
+        ##    3 x harmMonitorRange[2] will be used for it.
+        #harmMonitorControl=list( maxCnt=NULL),
+
+        ## if you have determined the constant alpha value to do the binomial
+        ## 'potential-harm-monitoring' tests at, they you can pass it through
+        ## this argument, in which case argument 'harmMonitorAlpha' need not
+        ## be specified
+        alphaPerTest=NULL,
+
+        ## character vector of methods to use to determine when to start non-efficacy
+        ## monitoring.  Each method requires different input information, and that
+        ## information should be input via the 'nonEffStartParams' argument - which
+        ## should be a list that the specifies the inputs for the method.  Each
+        ## method's input requirements should be specified in the documentation.
+        ##
+        ## Methods:
+        ##  FKG - the starting method suggested in Freidlin, Korn and Gray's 2010
+        ##        'Clinical Trials' paper:  "A general inefficacy interim 
+        ##        monitoring rule for randomized clinical trials"
+        ##        It boils down to start monitoring at the earlier infection count
+        ##        such that an estimated effect <= 0 would cause the trial to
+        ##        stop.  In our code that translates to a 95% CI (based on the
+        ##        asymptotic variance of the log-rank statistic) around an 
+        ##        estimated VE of 0% would exclude the VE specified by parameter
+        ##        'upperVEnonEff'.  The expectation is that this will be harmonized
+        ##        with the non-efficacy monitoring, and so will use the arguments
+        ##        'upperVEnonEff' 'alphaNoneff' from argument list.  However, should
+        ##        you want to use different values, you may do say by passing them
+        ##        via the 'nonEffStartParams' argument list.  The same naming should
+        ##        be used within the list.
+        ##      Parameters: upperVEnonEff alphaNoneff  
+        ##  
+        ##  fixed - Starts at the infection count specified by paramter 'N1'. 
+        ##          If 'N1' is set to 75, then non-efficacy always begins at the
+        ##          75th infection 
+        ##      Parameter: N1
+        ##
+        ##  ? - method specifies start time by a combination of variables:
+        ##      Parameters:
+        ##         minCnt - gives the minimum (combined) infection count at which
+        ##               monitoring can being
+        ##         maxCnt - gives the maximum (combined) infection count at which
+        ##               monitoring can being (it will begin at this count 
+        ##               whether or not the other criteria are satisfied).
+        ##               [OPTIONAL]
+        ##         lagTimes, lagMinCnts - these arguments are paired, each can
+        ##               be a vector of length > 1. 'lagMinCnts' is a vector
+        ##               if infection counts that are required to occur 'later
+        ##               in the trial' (larger value of follow-up time) than
+        ##               the associated time given in vector 'lagTimes'.
+        ##               E.g if lagTimes=c(26,39) and lagMinCnts=c(25,5) this
+        ##               says we cannot start until we've reached 25 infections
+        ##               that have occurred *after* (not including) week 26, and
+        ##               also 5 that have occurred after week 39.
+        ##       NOTE: Parameters: minCnt, lagTimes and lagMinCnts are all required,
+        ##               (minCnt can be set to 0 if desired); maxCnt is optional
+        ##
+        ##
+        ##  custom - [ NOT YET IMPLEMENTED ] You provide the function and the parameters
+        ##      Parameters: 'Func' (your function) + whatever parameters your function needs
+        ##
+        ##  old - the old 'seqDesign' starting method.  Severely deprecated.
+        ##      Parameters: minCnt, minPct, week1, week2
+        ##
+        nonEffStartMethod=c("FKG", "fixed", "?", "old"),
+
+        ## A *list* (not a vector) of parameters needed by the method specified
+        ## in argument 'nonEffStartMethod'.  Some methods have defaults in place,
+        ## for those you do not need to use 'nonEffStartParams' unless you want 
+        ## values other than the defaults.
+        nonEffStartParams=NULL,
+
+        #minCnt,
+        #maxCnt, ## the maximum start of non-efficacy monitoring
+        #minPct,
+        #week1,
+        #minCnt2,
+        #week2,
+
+        nonEffInterval,
+        nonEffIntervalUnit=c("counts","time"),
+
+        ## lowerVEnoneff is not required.  Specify only if you want this
+        ## condition as part of your monitoring.
+        lowerVEnoneff=NULL,
+        upperVEnoneff,
+        highVE, 
+        stage1VE,
+        lowerVEuncPower=NULL,  
+
+        ## VE alternatives to test for at the end of the trial
+        altVE=NULL,
+
+        alphaNoneff,
+        alphaHigh,
+        alphaStage1,
+        alphaUncPower=NULL,
+        alphaAltVE,
+
+        estimand=c("combined", "cox", "cuminc"),
+
+        ## 'laggedMonitoring' replaces argument 'post6moMonitor' and 
+        ## 'lagTime' replaces 'VEcutoffWeek'
+        ## The latter two args will remain for now but are deprecated
+        laggedMonitoring=FALSE,
+        lagTime,
+
+        ## The following arguments are being phased out, please use args
+        ## 'laggedMonitoring' and 'lagTime' in place of these.  
+        ## A warning will be issued if these are used
+        post6moMonitor = FALSE,
+        VEcutoffWeek,
+
+        saveFile= NULL,
+        saveDir = NULL,
+        verbose = TRUE )
+{
+  ## selected Arguments
+  ##
+  ##   lowerVEnoneff: 
+  ##       lower confidence bound to be below 'lowerVEnoneff' to meet criterion 1
+  ##       for declaring non-efficacy
+  ##
+  ##   upperVEnoneff:
+  ##       upper confidence bound to be below 'upperVEnoneff' to meet criterion 2
+  ##       for declaring non-efficacy
+  ##
+  ##   highVE:
+  ##       lower confidence bound to be above 'highVE' for declaring high efficacy
+  ##
+  ##   stage1VE:
+  ##       lower confidence bound to be above 'stage1VE' for advancing into Stage 2
+  ##
+  ##   lowerVEuncPower: 
+  ##       vector of VE value for which the user wishes to determine unconditional
+  ##       power to reject  H0: VE <= (lowerVEuncPower * 100)% 
+  ##       at 2-sided alpha level 'alphaUncPower'
+  ##
+  ##   alphaNoneff:
+  ##       One minus confidence level of 2-sided CI for non-efficacy monitoring
+  ##
+  ##   alphaHigh:
+  ##       One minus confidence level of 2-sided CI for high efficacy monitoring
+  ##
+  ##   alphaStage1:
+  ##       One minus confidence level of 2-sided CI for testing whether an arm 
+  ##       advances into Stage 2
+  ##
+  ##   alphaUncPower:  
+  ##       One minus confidence level of 2-sided CI for unconditional power to
+  ##       reject H0: VE <= (lowerVEuncPower * 100)% 
+
+
+  estimand <- match.arg(estimand)
+  nonEffIntervalUnit <- match.arg(nonEffIntervalUnit)
+  nonEffStartMethod  <- match.arg(nonEffStartMethod)
+  
+  if ( is.list(dataFile) ) {
+    trialObj <- dataFile
+  } else {
+    if ( !is.null(saveDir) ){
+      ## load in RData object (a list named 'trialObj' )
+      load(file.path(saveDir, dataFile))
+    } else {
+      load(dataFile)
+    }
+  }
+
+  ## check contents of 'trialData'
+  if ( !all( c("entry","exit","event","trt") %in% names(trialObj$trialData[[1]]) ) )
+    stop("Trial data must contain columns: entry, exit, event, trt\n")
+  
+  nTrtArms <- as.integer( trialObj$nArms - 1 )
+  nTrials <- length(trialObj[["trialData"]])
+
+  ## set altVE based on lowerVEuncPower, etc. if those were specified instead
+  if ( is.null(altVE) && !is.null(lowerVEuncPower)) {
+      altVE <- lowerVEuncPower
+  }    
+  if (missing(alphaAltVE) && !is.null(altVE)) {
+      alphaAltVE <- ifelse(!is.null(alphaUncPower), alphaUncPower, alphaStage1)
+  }
+
+  ## If post6moMonitor was set and 'laggedMonitoring' was not (there's no reason
+  ## for both of them to be)  should neverand 'lagTime' based on 'post6moMonitor'
+  ##  and 'VEcutoffWeek' if those args were used instead.
+  if (!missing(post6moMonitor) || !missing(VEcutoffWeek) ) {
+      warning("Arguments 'post6moMonitor' and 'VEcutoffWeek' are deprecated and",
+          "should\n", "no longer be used.  Please use arguments 'laggedMonitoring'",
+          " and 'lagTime'\n", "(respectively) in place of them.\n\n",
+          immediate.=TRUE)
+  }
+
+  ## If 'post6moMonitor' was used in place of laggedMonitoring and set to TRUE
+  ## then set laggedMonitoring to TRUE, otherwise no need to do anything (since
+  ## laggedMonitoring has default value of FALSE
+  if (!missing(post6moMonitor) && missing(laggedMonitoring)) {
+      laggedMonitoring <- post6moMonitor
+      if (isTRUE(post6moMonitor) && !missing(VEcutoffWeek) && missing(lagTime)) {
+          lagTime <- VEcutoffWeek
+      }
+  }
+
+
+  ## ----------------------------------------------------------------------
+  ##   The following code is needed to determine infection count at which to 
+  ##   begin the nonEff monitoring.  Also needed for harm-monitoring
+
+  ## derive the prob. of assignment to each vaccine arm (relative to placebo
+  ## only, not relative to other vaccine arms)
+  null.p <- numeric(length=nTrtArms)
+  for (i in 1:nTrtArms) {
+      arms.i <- c(1, i+1)
+      assn.probs <- trialObj$trtAssgnProbs[ arms.i ]
+      null.p[i] <- assn.probs[2] / sum(assn.probs)
+  }
+
+  ## if we have multiple vaccine groups and they are of different sizes,
+  ## then we must stop.  The  code is not set up to handle that yet.
+  if (nTrtArms > 1  && ( max(null.p)-min(null.p) > sqrt(.Machine$double.eps) ) )
+  {
+     stop("The code is not currently set up to handle harm monitoring when\n",
+          "there are multiple treatment arms and their sizes differ. \n\n")
+  } else {
+    ## all values of null.p are equal, just choose the first
+    null.p <- null.p[1]
+  }
+
+
+  ## This will also determine when nonEfficacy monitoring starts
+  ## (and therefore how long harm monitoring will last).
+  ## Two methods are found here and two later on.  These two do not
+  ## require any specific information about the trial to determine,
+  ## whereas the later methods do.
+
+  ## Method implemented here:
+  ##    Start nonEff monitoring at the smallest infection count for which we 
+  ##    would be able to reject the null hypothesis that VE = upperVEnoneff
+  ##    if our point estimate of VE = 0.  This computation requires us to 
+  ##    assume that our test statistic is asymptotically equivalent to the
+  ##    log-rank statistic, which (under the null of no diff - not the setting
+  ##    we're in, right?) has a distribution that is 
+  ##      Normal( 0, sqrt(1/(p*(1-p)*D))),  where
+  ##    D = number of endpoints between the placebo and trt arm being monitored,
+  ##    p = prob. of assignment to the vaccine arm vs. the placebo arm (all 
+  ##        other arms ignored for computing 'p')
+  ##
+  if ( nonEffStartMethod == "FKG") {
+ 
+     if (!is.null(nonEffStartParams)) {  
+        ## values specified directly by user (maybe - we don't
+        ## know what's actually in 'nonEffStartMethod' yet
+        upperVE  <- nonEffStartParams$upperVEnoneff
+        alphaNE  <- nonEffStartParams$alphaNoneff
+
+        if ( is.null(upperVE) && is.null(alphaNE) )
+            warning("The argument 'nonEffStartParams' has been specified but",
+                    "it does not contain\n", "parameters used by method FKG\n\n",
+                    immediate.=TRUE)
+     } else {
+        upperVE <- NULL
+        alphaNE <- NULL
+     }
+
+     ## Fill in NULL values for either parameter using the monitorTrial 
+     ## arguments upperVEnoneff and alphaNoneff
+     if ( is.null(upperVE) )
+         upperVE <- upperVEnoneff
+
+     if ( is.null(alphaNE) )
+         alphaNE <- alphaNoneff
+
+     if ( is.null(upperVE) || is.null(alphaNE) )
+         stop( "One or both of the arguments needed by nonEffStartMethod 'FKG'",
+            "are missing\n.", "They were not specified via argument ",
+            "'nonEffStartParams' and their values also could not be obtained\n",
+            "from the argument 'upperVEnoneff' and 'alphaNoneff'\n",
+            "Exiting...\n" )
+ 
+     N1 <- ceiling( qnorm(1 - alphaNE/2)^2 /
+                     ( null.p*(1-null.p)*log(1-upperVE)^2 ) )
+
+     ## set upperbound of 'harmMonitorRange' to be 'N1'
+     harmMonitorRange <- c(harmMonitorRange[1], N1)    
+
+  } else if ( nonEffStartMethod == "fixed" ) {
+
+     if (!is.null( nonEffStartParams$N1 ) ) {
+        N1 <- nonEffStartParams$N1
+
+        ## set upperbound of 'harmMonitorRange' to be 'N1'
+        harmMonitorRange <- c(harmMonitorRange[1], N1)    
+     } else {
+        stop("Argument 'nonEffStartMethod' was specified as 'fixed'. ",
+             "This method requires\n", "you to provide an argument named",
+             "'N1' via the list argument 'nonEffStartParams'\n.",
+             "e.g. nonEffStartParams <- list(N1=60).  Please fix.\n" )
+     }
+  }
+
+
+  ## -------------------------- get harm bounds ---------------------------  
+
+  # calculate stopping boundaries for harm
+  ## NOTE: harmMonitorRange dictates that range over which the type-I error is
+  ## spent, it does not specify the time at which harm monitoring stops.  That is
+  ## dictated by when non-eff monitoring begins
+  if ( is.null(alphaPerTest) ){ 
+    ## choose the value of alphaPerTest to spend the type I error over harmMonitorRange
+    alphaPerTest <- getAlphaPerTest(harmMonitorRange, null.p,
+                                    totalAlpha = harmMonitorAlpha)
+  }
+
+  ## If nonEffStartMethod "?" was chose then see if maxCnt was used
+  if (nonEffStartMethod == "?" && !is.null(nonEffStartParams$maxCnt) ) {
+      if ( is.infinite(nonEffStartParams$maxCnt) ) 
+          nonEffStartParams$maxCnt <- NULL
+      else
+          maxCnt <- nonEffStartParams$maxCnt
+  }
+
+  ## For generating the bounds, we need both 'N' and the upper limit of 
+  ## 'harmMonitorRange' to be an upper limit on the number of tests to do
+  ## (i.e. an upper limit on when the first non-efficacy will be done)
+  if (exists("N1")) {
+    maxCnt = N1
+
+  } else if ( !exists("maxCnt") ) {
+    maxCnt = 5 * harmMonitorRange[2]
+  }
+
+  ## get harm bounds 
+  harmBounds <- getHarmBound(
+                    N = maxCnt,
+                    per.test = alphaPerTest, 
+                    harmBoundRange = c(harmMonitorRange[1], maxCnt),
+                    null.p = null.p, 
+                    dataDir = saveDir, 
+                    verbose = verbose)
+
+  ## -------------------------- end get harm bounds ---------------------------  
+
+
+  ## creates a list of length 'nTrials' each element of which is a list of 
+  ## length 'nTrtArms'
+  out <- rep( list(vector("list",nTrtArms)), nTrials )
+
+
+  ## censor all trials to stage 1 (fastest to do all at once).  Still need to
+  ## keep access to uncensored data, for highEff monitoring
+  if ( !missing(stage1) ) {
+      stg1dat <- censorTrial(trialObj$trialData, times=stage1,
+                             timeScale="follow-up")
+  }
+
+  ## Start looping over trials
+  for (i in 1:nTrials ) {
+
+    ## extract data for the i-th trial
+    if ( !missing(stage1) ) {
+       datI <- stg1dat[[i]]
+       datIall <- trialObj[["trialData"]][[ i ]]
+    } else {
+       datI <- trialObj[["trialData"]][[ i ]]
+    }
+    
+    ## create separate set of only infections ('events'), then
+    ## order the events by trial time at which they are observed
+    eventDF <- datI[datI$event == 1, ]
+    eventDF <- eventDF[order(eventDF$exit), ]
+
+    #cat("Trial :", i, "  \n")
+
+    ## Now start comparisons - each active arm vs. placebo arm, one at a time
+    for (j in 1:nTrtArms) {
+      
+      ## subset *all data* down to the two arms being compared
+      datI.j <- datI[datI$trt %in% c(0,j), ]
+      
+      ## convert 'trt' to indicator variable before passing it to
+      ## 'applyStopRules' (i.e. convert the non-zero values to 1)
+      datI.j$trt <- as.integer(datI.j$trt > 0 )
+
+      ## same for the 'all' data.frame
+      if ( exists("datIall") ){
+         datIall.j <- datIall[datIall$trt %in% c(0,j), ] 
+         datIall.j$trt <- as.integer(datIall.j$trt > 0 )
+      }
+      
+
+
+      ## 1. do harm monitoring for j-th treatment arm vs. placebo
+
+      ## subset events in relevant arms: j-th active trt and placebo(trt=0)
+      E.j <- eventDF[eventDF$trt %in% c(0,j), ]
+      nInfec <- nrow(E.j) # counts infections through 'stage1'
+      E.j$nInf <- 1:nInfec
+
+      if (nonEffStartMethod == "?") {
+          if (!is.null(nonEffStartParams)) {
+              argNames <- c("minCnt","maxCnt","lagTimes","lagMinCnts")
+              argList <- nonEffStartParams[ 
+                             argNames[ argNames %in% names(nonEffStartParams) ] ]
+
+              if (!all( c("minCnt","lagTimes","lagMinCnts") %in% names(argList) ))
+                  stop("The argument 'nonEffStartParams' has been specified but",
+                       "it does not contain\n", "all the parameters needed by ",
+                       "nonEffStartMethod '?'\n") 
+          } else {
+              stop("The use of nonEffStartMethod ", nonEffStartMethod, " requires",
+                   " that you specify parameters: \n",
+                   " 'minCnt', 'lagTimes' and 'lagMinCnts' \n",
+                   "They must be passed to 'monitorTrial' through the argument ",
+                   "nonEffStartParams - which must be a list.\n",
+                   "Please fix and then rerun\n")
+          }
+          ## gets infection count at which non-efficacy monitoring begins
+          N1 <- getFirstNonEffCnt(datI.j, minCnt=argList$minCnt,
+                    lagTimes=argList$lagTimes, lagMinCnts=argList$lagMinCnts )
+
+      } else if (nonEffStartMethod == "old") {
+
+          if (!is.null(nonEffStartParams)) {
+              ## values specified directly by user - maybe. 
+              ## We don't know what's actually in 'nonEffStartMethod' yet
+              minPct  <- nonEffStartParams$minPct
+              minCnt  <- nonEffStartParams$minCnt
+              week1   <- nonEffStartParams$week1
+              minCnt2 <- nonEffStartParams$minCnt2
+              week2   <- nonEffStartParams$week2
+
+              if ( is.null(minPct)  || is.null(minCnt) || is.null(week1) ||
+                   is.null(minCnt2) || is.null(week2)  ) 
+                  stop("The argument 'nonEffStartParams' has been specified but",
+                      "it does not contain\n", "all the parameters needed by ",
+                      "nonEffStartMethod 'old'\n")
+          }
+
+          ## Old method of determining "N1" - depracated for mulitple reasons:
+          ## it cannot easily be determined when/if the minPct criteria will be
+          ## satisfied, introducing an inability to effectively anticipate and
+          ## plan for analyses.  Other methods allow for use of various forms 
+          ## of minimum infection cutoffs - those should be used instead
+          N1 <- getInfecCntFirstNonEff( E.j, 
+                     minPercent = minPct,
+                     minCount = minCnt, 
+                     week1 = week1, 
+                     nInfecAfterwk = minCnt2,
+                     week2 = week2)
+      }
+
+      ## Ensure we have harm bounds up to value 'N1', if not, regenerate them 
+      ## so we have enough.
+      if (N1 > max(harmBounds$N)) {
+          maxCnt <- 2 * N1
+
+          ## get harm bounds 
+          harmBounds <- getHarmBound(
+                            N = maxCnt,
+                            per.test = alphaPerTest,
+                            harmBoundRange = c(harmMonitorRange[1], maxCnt),
+                            null.p = null.p,
+                            dataDir = saveDir,
+                            verbose = verbose)
+      }
+
+      ## subset to restrict harm monitoring to the first 'N1' infections
+      harmBounds.j <- harmBounds[harmBounds$N <= N1, c("N","V","P")]
+      
+      ## doEvaluate harm monitoring bounds.  Just based on infected ppts, so
+      ## only uses 'E.j'
+      harmRes  <- do_harm_monitoring(E.j, bounds = harmBounds.j ) 
+      
+      ## if there is indication of "harm" then need to create store output
+      ## object then move to next trial 
+      if ( harmRes$isHarm ) {
+          fst <- finalStage1Test(
+                     datI.j,
+                     analysisType = "stopTime",
+                     lowerVE = altVE,
+                     alphaLevel = alphaAltVE,
+                     estimand = estimand,
+                     time = harmRes$stopTime,
+                     randFraction = null.p )
+
+          fest <- fst$stage1summ 
+          VEcir <- !is.null(fest$VE_CIR)
+          VE_CI <- if (VEcir) {
+                       c(fest$VE_CIR_loCI, fest$VE_CIR_upCI)
+                   } else {
+                       c(fest$VE_Cox_loCI, fest$VE_Cox_upCI)
+                   }
+
+          out[[i]][[j]] <- 
+              list( 
+                  boundHit = "Harm",
+                  stopTime = harmRes$stopTime, 
+                  stopInfectCnt = harmRes$stopInfectCnt,
+                  stopInfectSplit = harmRes$stopInfectSplit,
+                  stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
+                  stopVE_CI= VE_CI,
+                  VE_estimand = estimand,
+                  stage1complete = FALSE,
+                  stage2complete = FALSE,
+                  altDetected = fst$altDetected  )
+
+        next
+      } 
+
+
+      ## If harm bounds not hit, move to nonEff monitoring
+
+      ## 2. begin non-eff monitoring prep
+      ## --------------------------------
+
+
+      if (N1 > nInfec) {
+
+          ## deal with annoying case where the trial didn't have enough infec.s
+          ## to reach the start point of the non-eff. interim analyses
+           
+          ## For now we do nothing, except skip all the interim analysis code
+          ## and go directly to the finalStage1 test
+          nonEffTimes <- NA
+
+          ## create an empty object futRes needed later to make code work
+          futRes <- list()
+
+          ## Set 'N1' to NA ??  Need to think about it
+          ## N1 <- NA
+
+      } else {  # This 'else' goes on FOREVER!
+    
+          ## determine 'nonEffTimes' and then do non-eff monitoring
+          ## Determine the times at which nonEff monitoring will occur
+          if (nonEffIntervalUnit == "counts") {
+
+              ## makes sequence of counts at which analyses will be done
+              nonEffCnts <- seq(from = N1, to = nInfec, by = nonEffInterval)
+
+              ## Convert counts into times.  
+              nonEffTimes <- getInfectionTimes(datI.j, cnts=nonEffCnts )
+          } else {
+              ## User specified a time-sequence for monitoring. Figure out when 
+              ## the first time will be, and the time of the last infection too,
+              ## then create the sequence
+              firstLastnonEffTimes <- 
+                  getInfectionTimes(datI.j, cnts=c(N1, nInfec))
+
+              nonEffTimes <- 
+                  seq(from = firstLastnonEffTimes[1],
+                        to = firstLastnonEffTimes[2],
+                        by = nonEffInterval)
+          }
+
+          ## run non-eff 
+          futRes <- 
+              applyStopRules (
+                  datI.j,
+                  testTimes = nonEffTimes,
+                  boundType = "nonEff",
+                  boundLabel = "NonEffInterim", 
+                  lowerVE = lowerVEnoneff,
+                  upperVE = upperVEnoneff,
+                  alphaLevel = alphaNoneff,
+                  laggedMonitoring = laggedMonitoring,
+                  lagTime = lagTime,
+                  estimand=estimand,
+                  randFraction = null.p )
+
+          ## if noneff hit, then store results and go to next arm
+          ## (note: output will be a list because 'futRes' is a list
+          if ( futRes$boundWasHit ) {
+
+             fst <- finalStage1Test(
+                        datI.j,
+                        analysisType = "stopTime",
+                        lowerVE = altVE,
+                        alphaLevel = alphaAltVE,
+                        estimand = estimand,
+                        time = futRes$stopTime,
+                        randFraction = null.p )
+
+              fest <- fst$stage1summ 
+              VEcir <- !is.null(fest$VE_CIR)
+              VE_CI <- if (VEcir) {
+                           c(fest$VE_CIR_loCI, fest$VE_CIR_upCI)
+                       } else {
+                           c(fest$VE_Cox_loCI, fest$VE_Cox_upCI)
+                       }
+
+              out[[i]][[j]] <- 
+                  c( futRes,
+                     list( stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
+                           stopVE_CI= VE_CI,
+                           VE_estimand = estimand,
+                           firstNonEffCnt = N1,
+                           stage1complete = FALSE,
+                           stage2complete = FALSE,
+                           altDetected = fst$altDetected ) )
+              next
+          } 
+
+
+          ## 3. if nonEff NOT hit, then move on to high-eff monitoring
+          ##    We first do *only* at the stage1 times (i.e. same times as for
+          ##    nonEff monitoring ), but using all data  
+          highEffRes <- applyStopRules(
+                            datIall.j,
+                            testTimes = nonEffTimes,
+                            boundType = "highEff",
+                            boundLabel = "HighEff", ## assumed by later function
+                            lowerVE = highVE,
+                            alphaLevel = alphaHigh,
+                            laggedMonitoring = FALSE,
+                            estimand=estimand,
+                            randFraction = null.p )
+
+          if ( highEffRes$boundWasHit ) {
+              fst <- finalStage1Test(
+                         datI.j, 
+                         analysisType = "stopTime", 
+                         lowerVE = altVE, 
+                         alphaLevel = alphaAltVE, 
+                         estimand = estimand, 
+                         time = highEffRes$stopTime,
+                         randFraction = null.p )
+
+              fest <- fst$stage1summ 
+              VEcir <- !is.null(fest$VE_CIR)
+              VE_CI <- if (VEcir) {
+                           c(fest$VE_CIR_loCI, fest$VE_CIR_upCI)
+                       } else {
+                           c(fest$VE_Cox_loCI, fest$VE_Cox_upCI)
+                   }
+
+              ## store output, then determine value for 'altDetected'
+              ## (note: output will be a list because 'highEffRes' is a list
+              out[[i]][[j]] <- 
+                  c( highEffRes,
+                     list( summNonEff = futRes$summObj,
+                           stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
+                           stopVE_CI= VE_CI,
+                           VE_estimand = estimand,
+                           firstNonEffCnt = N1,
+                           stage1complete = FALSE, 
+                           stage2complete = FALSE,
+                           altDetected = fst$altDetected ) )
+
+              next
+          }
+      }  ## end of (N1 > nInfec) if/else clause
+
+##-----------------------------------------------------------------------
+
+      ## Reached the end of stage 1 w/o hitting any boundaries (yee-ha!)
+      ## celebrate by doing 'end-of-stage-1' dance 
+      fst <- finalStage1Test(
+                 datI.j, 
+                 analysisType = "final", 
+                 stage1VE = stage1VE,
+                 lowerVE = altVE,
+                 alphaLevel = alphaStage1, 
+                 estimand = estimand, 
+                 boundLabels=c("Eff", "NonEffFinal"),
+                 randFraction = null.p )
+
+      fest <- fst$stage1summ 
+      VEcir <- !is.null(fest$VE_CIR)
+      VE_CI <- if (VEcir) {
+                   c(fest$VE_CIR_loCI, fest$VE_CIR_upCI)
+               } else {
+                   c(fest$VE_Cox_loCI, fest$VE_Cox_upCI)
+               }
+
+      ## not storing into out[[i]][[j]] yet, we'll add on if not final-non-eff
+      finalStg1List <- 
+          c( fst,
+             list( stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
+                   stopVE_CI= VE_CI,
+                   VE_estimand = estimand,
+                   firstNonEffCnt = N1,
+                   summNonEff  = futRes$summObj,
+                   stage1complete = TRUE,
+                   stage2complete = FALSE ) )
+
+      ## if we hit the bound at stage 1 analysis, then we're done with this cohort
+      if (fst$boundHit == "NonEffFinal") {
+          out[[i]][[j]] <- finalStg1List
+          next
+      }
+
+      ## 5.  If no stage1 highEff, and we "passed" the end-of-stg1 analysis, then do
+      ##    the stage2 highEff analysis
+
+      ## (a) timing of it is  half way between end of stage 1 and end of trial 
+      ##     compute as end-of-stg1 (max(datI.j$exit)) plus half the remaining time
+      ##     (stage2- stage1)/2 until the last person from stage1 completes stg2
+      stg2highEffTime <- ( max(datI.j$exit) + (stage2 - stage1)/2 )
+
+      stg2highEff <- 
+          applyStopRules(
+                 datIall.j,
+                 testTimes = stg2highEffTime,
+                 boundType = "highEff",
+                 boundLabel = "HighEff", ## assumed by later function
+                 lowerVE = highVE,
+                 alphaLevel = alphaHigh,
+                 laggedMonitoring = FALSE,
+                 estimand=estimand,
+                 randFraction = null.p )
+
+
+      ## Note: 'altDetected' result is included in 'finalStg1List', which is why
+      ##  you will not see it added to any of the following output objects
+      if ( stg2highEff$boundWasHit ) {
+          
+          ## alter some values in present in 'finalStg1List'
+          finalStg1List$boundHit  <- stg2highEff$boundHit
+          finalStg1List$boundType <- stg2highEff$boundType
+          finalStg1List$stopTime  <- stg2highEff$stopTime
+
+          ## remove components from stg2Eff already present in 'finalStg1List'
+          dropComps <- c("boundWasHit", "boundHit", "boundType", "stopTime")
+          stg2HE    <- stg2highEff[ !names(stg2highEff) %in% dropComps ]
+
+          ## Note: 'altDetected' result is included in 'finalStg1List'
+          out[[i]][[j]] <- c( finalStg1List, 
+                              list( summNonEff = futRes$summObj ),
+                              stg2HE ) 
+      } else {
+          ## Stage 2 completed without hitting high-efficacy
+          finalStg1List$stage2complete <- TRUE
+          finalStg1List$stopTime       <- max( datIall.j$exit)
+          out[[i]][[j]] <- c( finalStg1List,
+                              list( 
+                                summNonEff  = futRes$summObj,
+                                stg2highEff = stg2highEff$summObj ) )
+      }
+    }
+  }
+##-----------------------------------------------------------------------
+#   bound            stage1complete  altDetected(stage1 tests - 2 of them)
+#   "NonEffInterim"  FALSE           FALSE 
+#   "HighEff"        FALSE           TRUE/FALSE [could be either]
+#   "NonEffFinal"    TRUE            FALSE 
+#   "Eff"            TRUE            TRUE/FALSE [could be either]
+#   "HighEff"        TRUE            (Same as for "Eff") 
+##-----------------------------------------------------------------------
+  
+  ## I left this in here, but not very useful - will excise later probably
+  if (verbose){
+    for (i in 1:nTrtArms) {
+      cat("Probabilities of reaching each possible conclusion:\n")
+      print( round( table(sapply( out, function(x) x[[i]]$boundHit ),
+                          useNA="ifany")/nTrials, 4))
+      
+      if (!is.null(altVE)){
+        altDetectedMatrix <- 
+            do.call("rbind", 
+                    lapply(out, function(x) x[[i]]$altDetected ))
+
+        # this occurs if each trial stops for potential harm, and thus the value of 
+        # 'altDetected' is NULL for each trial
+        if ( is.null( altDetectedMatrix ) ) {
+            designPower <- 0
+        } else {
+            designPower <- colSums(altDetectedMatrix, na.rm=TRUE)/nTrials
+        }
+        cat("\nUnconditional power to reject the specified null hypotheses =",
+             format(designPower, digits=3, nsmall=3), "\n\n")
+      }
+    }
+  }
+  
+  ## save monitoring output
+  if ( !is.null(saveDir) ) {
+    if ( is.null(saveFile) ) {
+        if ( is.list(dataFile) )
+          warning(
+              "The output of 'monitorTrial' will not be saved to a file.\n",
+              "You have not specified the argument 'saveFile' and a default\n",
+              "filename cannot be constructed when argument 'dataFile' is ",
+              "a list.\n\n", immediate.=TRUE)
+        saveFile <- paste0("monitorTrial", 
+                           substr(dataFile, 9, nchar(dataFile)-6), 
+                           "_", estimand, ".RData")
+    }
+    save(out, file = file.path(saveDir, saveFile) )
+    if (verbose) { 
+        cat("Output saved in:\n", file.path(saveDir, saveFile), "\n\n") 
+    }
+  } 
+
+  ## it should not be an "either/or" decision whether you save or output the results
+  return( invisible( out ) )
+}
+
+######################################## end of 'monitorTrial'#########################################
+
+
+
+
+### This version is Sept 10, 2015
+###   I'm beginning major modification of the function to eliminate stuff that
+###   is unnecessary and makes no sense.
+###     - only one set up "upper","lower" parameters to be used for both 
+###       high eff and noneff.  Only one can be done at a time anyway.
+###     - the upper/lower arg.s will be in terms of VE and not HR, since all of
+###       thinking is done on the VE scale (and HR only applies to cox model)
+###     - removing all 'final analysis' related things, which will include
+###       the 'UncPower' params, Stage1 params, etc.
+###     - only one 'alpha' parameter
+###     - a more extensive set of output information
+###     - < etc >
+
+applyStopRules <- 
+    function(d, infectionTotals=NULL, testTimes=NULL, 
+             boundType = c("nonEff","highEff"), boundLabel=boundType,
+             lowerVE=NULL,  upperVE=NULL, alphaLevel=0.05,
+             laggedMonitoring=FALSE,  lagTime=NULL, laggedOnly=FALSE,
+             estimand = c("cox","cuminc","combined"),
+             randFraction = null.p )
+{
+  
+  ## This function apply the stopping rules for nonefficacy and high efficacy monitoring.
+  ##
+  ## Argument 'd' should be a data.frame containing (at least) columns:
+  ##   'entry' - the entry time (in trial time)
+  ##   'exit'  - time of event, trial completion or dropout (trial time)
+  ##   'event' - 0/1 indicator of event of interest
+  ##   'trt'   - 0/1 indicator of vaccine receipt
+  ## 
+  ## Other arguments:
+  ## ---------------
+  ## infectionTotals - a vector specifying the total number of infections
+  ##                     at which analyses should take place.  
+  ## 
+  ## testTimes   - a vector specifying the calendar times at which noneff analyses
+  ##                 should take place.  Either this arg. or 'infectionTotals' must
+  ##                 be specified.  This arg is preferred as it will need to be
+  ##                 deteremined within the function if not given by the user.
+  ## 
+  ## boundType   - character string indicating the type of bound being evaluated
+  ##               must be one of "nonEff" or "highEff".
+  ##
+  ## boundLabel  - a label to use for naming the bound.  Can be whatever you like.
+  ##               Defaults to the value of argument 'boundType'
+  ##
+  ## lowerVE     - if boundType=='nonEff' then this specifies the VE value that the
+  ##               lower CI of the estimated VE(s) must lie below for non-efficacy
+  ##               stopping to occur.   If boundType='highEff' then this specifies
+  ##               the VE value that the lower CI of the estimated VE(s) must lie 
+  ##               ABOVE for high-efficacy stopping to occur
+  ## 
+  ## upperVE     - applicable only when boundType=="nonEff".  Specifies the VE that
+  ##               the upper CI of the estimated VE(s) must lie below in order to
+  ##               stop for nonEfficacy.
+  ## 
+  ## alphaLevel  - two-sided alpha level to use in constructing 95% confidence 
+  ##               interval for the VE(s) estimated by the estimand(s) specified
+  ##               by the argument 'estimand'
+  ##
+  ## laggedMonitoring - TRUE/FALSE (default is FALSE)
+  ##               Should monitoring be done on a subset of data that excludes
+  ##               the first 'lagTime' weeks of follow-up for each participant.
+  ##
+  ## lagTime     - The amount of "lag-time" before lagged-monitoring begins.
+  ##               Must be specified if laggedMonitoring is TRUE
+  ##
+  ## laggedOnly - TRUE/FALSE, should *only* lagged monitoring be done            
+  ##               (not currently implemented)
+  ##
+  ## estimand    - a character string specifying the estimand(s) to be used in
+  ##                 monitoring (can be one of "combined", "cox", and "cuminc")
+  ##
+  ## randFraction - the fraction of randomizations going to a particular 
+  ##                treatment arm, when only that treatment arm and the placebo 
+  ##                arm are considered.
+  ## ---------------------------------------------------------------------------
+
+  ## check contents of 'd'
+  if ( !all( c("entry","exit","event","trt") %in% names(d) ) )
+    stop("DataFrame 'd' must contain columns: entry, exit, event, and trt\n")
+
+  boundType <- match.arg(boundType)
+  estimand  <- match.arg(estimand)
+  
+  if (boundType == "nonEff"){ 
+    if ( any( is.null(upperVE), is.null(alphaLevel) ) ) {
+        stop("The arguments 'upperVE' and 'alphaLevel' must be specified for",
+             " non-efficacy monitoring.\n") 
+     }
+  } else {
+    # high-efficacy monitoring
+    if ( any( is.null(lowerVE), is.null(alphaLevel) ) ) {
+        stop("The arguments 'lowerVE' and 'alphaLevel' must be specified for ",
+             "high efficacy monitoring.\n")
+    }
+  }
+
+  ## Make sure we have only two trt groups and that they're coded as 0 and 1
+  uniq.trt <- sort( unique(d$trt) )
+  if ( length(uniq.trt)>2 ) {
+    warning("The data set given to 'applyStopRules' contains", length(uniq.trt),
+            "treatments - it should only contain 2.\n\n", immediate.=TRUE) 
+  } else if ( any( uniq.trt != c(0,1) ) ) {
+    warning("The data set given to 'applyStopRules' contains values of 'trt'",
+            "other than 0 and 1, this is probably an error.\n",
+            "The values are: ", uniq.trt[1], " and ", uniq.trt[2], "\n\n",
+             immediate.=TRUE)
+  }
+
+  ## If 'lowerVE' is NULL we set it to a large value so that we can use a common
+  ## set of code (no special cases) and not have the bound have any effect - 
+  ## since the associated criteria will always be met. Note: max possible VE is 1
+
+  if ( is.null(lowerVE) ) 
+    lowerVE <- 17
+
+  ## force evaluation of some input arguments to avoid scoping issues when passing
+  ## them down into subfunctions.
+  force( alphaLevel )
+  force( upperVE )
+  force( randFraction )
+
+
+  ### -------- Stop checking, start working ---------
+
+
+
+  ## If 'infectionTotals' was given, then need to get associated times
+  if ( is.null(testTimes) ) {
+    if ( !is.null(infectionTotals) ) {
+        testTimes <- getInfectionTimes(d, cnts=infectionTotals)  
+    } else {
+      stop("One of the arguments ('infectionTotals', 'testTimes') must be specified\n") 
+    }
+  }
+
+  ## the length of testTimes indicates how many tests we'll be doing
+  nTests <- length(testTimes)
+
+  if (estimand == "combined" && boundType=="highEff") {
+      estimand <- "cuminc"
+  }
+
+  ## set indicators for estimation types to use
+  cox  <- (estimand %in% c("cox",   "combined"))
+  cir  <- (estimand %in% c("cuminc","combined"))
+
+
+  ## create an indicator vector of what is being evaluated in the monitoring
+  ## (i.e. which estimates and which data - non-lagged/lagged )
+  indEst <- c(cir = cir,  
+              cox = cox, 
+              lagcir = cir && laggedMonitoring,
+              lagcox = cox && laggedMonitoring )
+
+  ## define function for testing stopping criteria based on boundType
+  ## note: the as.vector() is included to strip off any names attached
+  evalStopCrit <- if ( boundType=="nonEff" ) {
+                    function(VEci, lowerVE, upperVE) 
+                      return( as.vector( (VEci[,1] < lowerVE) & (VEci[,2] < upperVE)) )
+                  } else {
+                    ## boundType == "highEff"
+                    function(VEci, lowerVE, ...) 
+                      return( as.vector( VEci[,1] > lowerVE ) )
+                  }
+
+  ## set to prevent R from changing data.frame character columns into factors
+  options( stringsAsFactors = FALSE)
+
+  ## model formula to be used by coxph() and/or survfit()
+  survFormula <- Surv(exit-entry, event) ~ trt
+  
+
+  ## ***** Create list(s) containing all datasets needed for nonefficacy *******
+  
+  ## (1) Create a list of censored datasets - one per element of 'testTimes'
+  censDatList <- censorTrial(d, times=testTimes, timeScale="calendar")
+
+  ## (2) If laggedMonitoring == TRUE, create a 2nd list of censored datasets,
+  ##     this time left censored to 'lagTime' (based on follow-up time).  Note
+  ##     that this set is based off the right censored data in censDatList.
+  if (laggedMonitoring) {
+      censDatList_lag <- censorTrial(censDatList, times=lagTime, 
+                                          timeScale="follow-up", type="left")
+  }
+
+
+  ## ***** Compute estimators needed for requested monitoring  *****
+
+  ## cumulative incidence ratio, if requested
+  if (cir) {
+      cumIncOut <- cumIncRatio( censDatList, times="last", 
+                                alphaLevel = alphaLevel,
+                                randFraction = randFraction)
+
+      CIRobj <- transform( cumIncOut, 
+                    infectTotal = nEvents,
+                    infectSplit = paste0("Pl:Vx =", nEvents.2, ":", nEvents.1),
+                    nPlac       = nEvents.2,
+                    nVacc       = nEvents.1,
+                    evalTimeCIR = evalTime,
+                    varlogFR    = varlogFR,
+                    VE_CIR      = VE,
+                    VE_CIR_loCI = VE_loCI,
+                    VE_CIR_upCI = VE_upCI,
+                    stopCrit_CIR = evalStopCrit( cbind(VE_loCI, VE_upCI), 
+                                       lowerVE=lowerVE, upperVE=upperVE )
+                 )
+
+      ##  <<< This should no longer be needed. Code was added  >>>  ##
+      ##  <<< indide of cumIncRatio to handle this case        >>>  ##
+      ##  <<<------------------------------------------------- >>>  ##
+      ## If there were any test times at which we had no vaccinee infections then
+      ## our variance estimates will not be usable - they will (or should) be NA.
+      ## Set variances to NA (for cox model) and set 'stopCrit_xxx' appropriately.
+      #ZeroVacc <- ( CIRobj$nVacc == 0 )
+      #if ( any(ZeroVacc) ) {
+      #    CIRobj$stopCrit_CIR[ ZeroVacc ] <- 
+      #        ifelse(boundType=="highEff", TRUE, FALSE)
+      #}  
+
+      ## subset to retain only the var.s created above
+      CIRobj <- CIRobj[c("infectTotal", "infectSplit", "nPlac", "nVacc", 
+                       "evalTimeCIR", "VE_CIR", "VE_CIR_loCI", "VE_CIR_upCI",
+                       "varlogFR", "stopCrit_CIR") ]
+
+      ## lagged CIR, if requested
+      if (laggedMonitoring) {
+          cumInc_lagOut <- 
+              cumIncRatio( censDatList_lag, times="last", 
+                           alphaLevel = alphaLevel,
+                           randFraction = randFraction)
+
+          ## subset/reorder columns, then rename (don't need 'futime' here, it'll be
+          lagCIRobj <- 
+              transform( cumInc_lagOut,
+                  infectTotal_lag = nEvents,
+                  infectSplit_lag = paste0("Pl:Vx =", nEvents.2, ":", nEvents.1),
+                  nPlac_lag       = nEvents.2,
+                  nVacc_lag       = nEvents.1,
+                  varlogFR_lag    = varlogFR,
+                  VE_lagCIR       = VE,
+                  VE_lagCIR_loCI  = VE_loCI,
+                  VE_lagCIR_upCI  = VE_upCI,
+                  stopCrit_lagCIR = evalStopCrit( cbind(VE_loCI, VE_upCI),
+                                        lowerVE=lowerVE, upperVE=upperVE )
+                  )
+
+          ## if zero infections in either group, then set
+          ## 'stopCrit_xxx' appropriately.
+          #lagZeroVacc <- ( lagCIRobj$nVacc == 0 )
+          #lagZeroPlac <- ( lagCIRobj$nPlac == 0 )
+
+          #if ( any(lagZeroVacc | lagZeroPlac ) ) {
+              ## set CI bounds to NA (they could be anything right now)
+          #    lagCIRobj$VE_lagCIR_loCI[ lagZeroVacc | lagZeroPlac ] <- NA
+          #    lagCIRobj$VE_lagCIR_upCI[ lagZeroVacc | lagZeroPlac ] <- NA
+
+          #    lagCIRobj$stopCrit_lagCIR[ lagZeroVacc ]  <-
+          #            ifelse(boundType=="highEff", TRUE, FALSE)
+
+          #    lagCIRobj$stopCrit_lagCIR[ lagZeroPlac ] <-
+          #            ifelse(boundType=="nonEff",  TRUE, FALSE)
+          #}
+
+          ## subset to retain only the var.s created above
+          lagCIRobj <- lagCIRobj[ c("infectTotal_lag", "infectSplit_lag", 
+                           "nPlac_lag", "nVacc_lag",
+                           "VE_lagCIR", "VE_lagCIR_loCI", "VE_lagCIR_upCI",
+                           "varlogFR_lag", "stopCrit_lagCIR") ]
+      }
+  }
+
+
+  ## coxph-based hazard ratio, if requested  (same crap, different estimator)
+  if (cox) {
+      coxHRout <- coxHR( censDatList, alphaLevel = alphaLevel,
+                         randFraction = randFraction)
+
+      CoxObj <- transform( coxHRout,
+                    infectTotal = nEvents,
+                    infectSplit = paste0("Pl:Vx =", nEvents.2, ":", nEvents.1),
+                    nPlac       = nEvents.2,
+                    nVacc       = nEvents.1,
+                    VE_Cox      = VE,
+                    VE_Cox_loCI = VE_loCI,
+                    VE_Cox_upCI = VE_upCI,
+                    stopCrit_Cox = evalStopCrit( cbind(VE_loCI, VE_upCI),
+                                       lowerVE=lowerVE, upperVE=upperVE )
+                 )
+
+      ##  <<< This should no longer be needed. Code was added  >>>  ##
+      ##  <<< indide of cumIncRatio to handle this case        >>>  ##
+      ##  <<<------------------------------------------------- >>>  ##
+      ## If there were any test times at which we had no vaccinee infections then
+      ## our variance estimates will not be usable - they will (or should) be NA.
+      ## Set variances to NA (for cox model) and set 'stopCrit_xxx' appropriately.
+      #ZeroVacc <- ( CoxObj$nVacc == 0 )
+      #if ( any(ZeroVacc) ) {
+      #    CoxObj$stopCrit_Cox[ ZeroVacc ] <-
+      #            ifelse(boundType=="highEff", TRUE, FALSE)
+          ## set CI bounds to NA (they could be anything right now)
+      #    CoxObj$VE_Cox_loCI[ ZeroVacc ] <- NA
+      #    CoxObj$VE_Cox_upCI[ ZeroVacc ] <- NA
+      #}
+
+      ## subset to retain only the var.s created above
+      CoxObj <- CoxObj[c("infectTotal", "infectSplit", "nPlac", "nVacc",
+                       "VE_Cox", "VE_Cox_loCI", "VE_Cox_upCI", "stopCrit_Cox") ]
+
+      if (laggedMonitoring) {
+          coxHR_lagOut <- coxHR( censDatList_lag, alphaLevel = alphaLevel,
+                                 randFraction = randFraction)
+
+                lagCoxObj <- transform( coxHR_lagOut,
+                    infectTotal_lag = nEvents,
+                    infectSplit_lag = paste0("Pl:Vx =", nEvents.2, ":", nEvents.1),
+                    nPlac_lag       = nEvents.2,
+                    nVacc_lag       = nEvents.1,
+                    VE_lagCox       = VE,
+                    VE_lagCox_loCI  = VE_loCI,
+                    VE_lagCox_upCI  = VE_upCI,
+                    stopCrit_lagCox = evalStopCrit( cbind(VE_loCI, VE_upCI),
+                                          lowerVE=lowerVE, upperVE=upperVE )
+                 )
+
+          ## if zero infections in either group, then set
+          ## 'stopCrit_xxx' appropriately.
+          #lagZeroVacc <- ( lagCoxObj$nVacc == 0 )
+          #lagZeroPlac <- ( lagCoxObj$nPlac == 0 )
+
+          #if ( any(lagZeroVacc | lagZeroPlac ) ) {
+          #    ## set CI bounds to NA (they could be anything right now)
+          #    lagCoxObj$VE_lagCox_loCI[ lagZeroVacc | lagZeroPlac ] <- NA
+          #    lagCoxObj$VE_lagCox_upCI[ lagZeroVacc | lagZeroPlac ] <- NA
+
+          #    lagCoxObj$stopCrit_lagCox[ lagZeroVacc ]  <- 
+          #            ifelse(boundType=="highEff", TRUE, FALSE)
+
+          #    lagCoxObj$stopCrit_lagCox[ lagZeroPlac ] <- 
+          #            ifelse(boundType=="nonEff",  TRUE, FALSE)
+          #}
+
+
+          ## subset to retain only the var.s created above
+          lagCoxObj <- lagCoxObj[,c("infectTotal_lag", "infectSplit_lag", 
+                           "nPlac_lag", "nVacc_lag",
+                           "VE_lagCox", "VE_lagCox_loCI", "VE_lagCox_upCI",
+                           "stopCrit_lagCox") ]
+      }
+  }
+
+  ## If both cir and cox were specified, then remove columns that are in common.
+  ## Do the same for lagged versions, if needed
+  if (cir && cox) {
+      CoxObj <- CoxObj[ !( names(CoxObj) %in% names(CIRobj) ) ]
+
+      if (laggedMonitoring) {
+          lagCoxObj <- lagCoxObj[ (! names(lagCoxObj) %in% names(lagCIRobj) )]
+      }
+  }
+
+
+  ##  *** now combine results across estimands  *** 
+
+  ## names of output objects from each estimator
+  objNames <- c("CIRobj", "CoxObj", "lagCIRobj", "lagCoxObj")
+
+  ## names of the objects that were computed/created
+  objsComputed <- objNames[ indEst ]
+
+  ## It's harder to cbind data.frames that vectors, because they use different
+  ## underlying approaches.  The issue is if you're cbind()ing objects that are
+  ## conditionally included like this:
+  ##    cbind( if (indicator1) a, if (indicator2) b, if (indicator3) c) 
+  ##   if a, b, c are vectors it works fine,  if any are data.frames it doesn't
+  ##   (unless all indicators are TRUE )
+  ##
+  ## Anyhoo, that's why I'm using the parse/eval approach to do this
+  ## There are other, uglier ways too.  I've not thought of anything cleaner yet 
+
+  cbind_call <- paste0("cbind(", paste(objsComputed, collapse=","), ")")
+  summObj <- eval( parse( text = cbind_call ) )
+
+  ## add 'test' and 'testTimes' onto the data.frame
+  summObj <- cbind( test = 1:nrow(summObj), testTimes = testTimes, summObj)
+
+
+  ##  ***** determine if stopping criteria were met at any timepoint  *****
+  ##  (overall stopping requires that all individual criteria be met)
+  ## identify columns containing stopping criteria evaluation
+  w.cols <- which( substr(names(summObj), 1, 8 ) == "stopCrit" ) 
+  stopCriteria <- apply( summObj[, w.cols, drop=FALSE], 1, all )
+
+
+  ## if the stopping criteria was satisfied, subset the output to include
+  ## only tests through the *first* time the criteria were met.
+  if ( any(stopCriteria) ) {
+    boundWasHit <- TRUE
+    boundHit <- boundLabel
+
+    stopIndx <- which( stopCriteria )[1]
+    summObj  <- summObj[1:stopIndx, ]
+    stopTime <- testTimes[ stopIndx ]
+    stopInfectCnt <- summObj$infectTotal[ stopIndx ] 
+  } else {
+    boundWasHit <- FALSE
+    boundHit <- NA
+    stopTime <- NA
+    stopInfectCnt <- NA
+  }
+
+  return(
+      list( boundWasHit   = boundWasHit,
+            boundHit      = boundHit,
+            boundType     = boundType, 
+            stopTime      = stopTime, 
+            stopInfectCnt = stopInfectCnt,
+            summObj       = summObj ) 
+        )
 }
