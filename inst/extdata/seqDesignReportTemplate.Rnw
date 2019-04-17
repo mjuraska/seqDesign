@@ -81,7 +81,7 @@ res[,3:NCOL(res)] <- res[,3:NCOL(res)]*100
 print(xtable(res, 
              align=rep(c("c","|c","c"), c(6,ifelse(!is.null(lowerVEuncPower),1,0),ifelse(!is.null(lowerVEuncPower),length(lowerVEuncPower)-1,0))), 
              digits=1, 
-             caption=paste0("Probabilities ($\\times 100$) of reaching each possible trial monitoring outcome",ifelse(!is.null(lowerVEuncPower)," and unconditional power ($\\times 100$) to reject the specified null hypothesis","")," for a study design with 1 vaccine arm with ",N.pla," placebo recipients and ",N.vax," vaccine recipients")
+             caption=paste0("Probabilities ($\\times 100$) of reaching each possible trial monitoring outcome",ifelse(!is.null(lowerVEuncPower)," and unconditional power ($\\times 100$) to reject the specified null hypothesis","")," for a 2-arm study design with ",N.pla," placebo and ",N.vax," vaccine recipients")
              ), 
       scalebox=ifelse(!is.null(lowerVEuncPower),0.85,1),
       caption.placement="top", 
@@ -115,13 +115,13 @@ if (!is.null(lowerVEuncPower)){
   
 text(0.2, res[res$aveHR==0.8, "noneff"]/100, "Non-efficacy", cex=1.1, pos=2, offset=1.1)
 text(0.15, 0.06, "Potential harm", adj=0, cex=1.1)
-text(0.68, 0.2, "High\nefficacy", adj=0, cex=1.1)
+text(0.65, 0.25, "High\nefficacy", adj=0, cex=1.1)
 text(0.28, 0.93, "Unconditional power\n[VE(0-18)>0%]", cex=1.1, pos=4)
 #text(0.45, 0.6, "Unconditional power\n[VE(0-18)>25%]", cex=1.1, pos=4)
-text(0.37, 0.5, 
+text(0.33, 0.5, 
      paste0("N=",N.pla,":",N.vax," placebo:vaccine group\n",infRate*100,"% annual placebo group incidence\n5% annual dropout\nVE halved in first 6 months\n",ifelse(estimand=="combined","Cox & cum inc-based ",ifelse(estimand=="cuminc","Cum inc ","Cox model ")),ifelse(post6moMonitor,"non-eff w/ post-6 mo monitoring\n","non-eff monitoring\n"),ifelse(estimand=="cox","Cox model high eff & unconditional power","Cum inc high eff & unconditional power"),"\n18-month accrual; average 309 per month"), 
      cex=1, pos=4)
-cat("\\caption{Probabilities of reaching each possible trial monitoring outcome",ifelse(!is.null(lowerVEuncPower),", and unconditional power to reject the specified null hypothesis","")," for a study design with 1 vaccine arm with ",N.pla," placebo recipients and ",N.vax," vaccine recipients}", sep="")
+cat("\\caption{Probabilities of reaching each possible trial monitoring outcome",ifelse(!is.null(lowerVEuncPower),", and unconditional power to reject the specified null hypothesis","")," for a 2-arm study design with ",N.pla," placebo and ",N.vax," vaccine recipients}", sep="")
 @
 \end{center}
 \end{figure}
@@ -465,28 +465,24 @@ print(xtable(res,
 \begin{figure}[H]
 \begin{center}
 <<label=plotHarmStopBounds, echo=FALSE, fig.width=5, fig.height=3.8>>=
-harmData <- read.csv(file.path(srcDir, paste0("harmBounds_N=100_alphaPerTest=0.0106_pVacc=",round(N.vax/(N.pla+N.vax),2),".csv")))
+harmData <- read.csv(file.path(srcDir, paste0("harmBounds_N=60_alphaPerTest=0.0140_pVacc=",round(N.vax/(N.pla+N.vax),2),".csv")))
 harmData <- subset(harmData, N>=10)
 par(mar=c(5.5,5,1,1), las=1, cex.axis=1.1, cex.lab=1.2)
-plot(-10,0, xlim=c(10,100), ylim=c(9,60), xaxt="n", yaxt="n", xlab="", ylab="", type="n")
+plot(-10,0, xlim=c(10,60), ylim=c(9,40), xaxt="n", yaxt="n", xlab="", ylab="", type="n")
 mtext("Total Number of Infections\n(Placebo + 1 Vaccine Arm)", side=1, line=3.5, cex=1.2)
 mtext("Number of Vaccine Infections\n(1 Vaccine Arm)", side=2, line=2.5, cex=1.2, las=0)
-axis(side=1, at=seq(10,90,by=10))
-axis(side=1, at=100)
-axis(side=2, at=seq(10,60,by=10))
-axis(side=3, at=seq(10,100,by=10), labels=FALSE)
-axis(side=4, at=seq(10,60,by=10), labels=FALSE)
+axis(side=1, at=seq(10,60,by=5))
+axis(side=2, at=seq(10,40,by=5))
+axis(side=3, at=seq(10,60,by=5), labels=FALSE)
+axis(side=4, at=seq(10,40,by=5), labels=FALSE)
 abline(0,1, col="gray30")
-text(30,36,"Y=X", col="gray30")
+text(28,32,"Y=X", col="gray30")
 points(harmData$N, harmData$V, pch=19, col="darkred", cex=0.5)
-for (i in c(20,40,60,100)){
+for (i in c(20,40,60)){
   segments(x0=i, y0=8, y1=harmData$V[harmData$N==i], lwd=2, lty="dashed", col="darkorange")
   segments(x0=10, x1=i, y0=harmData$V[harmData$N==i], lwd=2, lty="dashed", col="darkorange")
 }
-segments(x0=80, y0=8, y1=16, lwd=2, lty="dashed", col="darkorange")
-segments(x0=80, y0=30, y1=harmData$V[harmData$N==80], lwd=2, lty="dashed", col="darkorange")
-segments(x0=10, x1=80, y0=harmData$V[harmData$N==80], lwd=2, lty="dashed", col="darkorange")
-text(66, 23, "Potential Harm\nStopping\nBoundaries", adj=0, cex=1.1, font=2, col="blue")
+text(42, 21, "Potential Harm\nStopping\nBoundaries", adj=0, cex=1.1, font=2, col="blue")
 @
 \end{center}
 \end{figure}
@@ -511,23 +507,13 @@ randRatio <- N.pla/N.vax
 # calculate the MC average number of infections (pooled over placebo + 1 vaccine arm) triggering the first non-efficacy IA for trials with average VE=20%
 load(file.path(srcDir,paste0("monitorTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=0.2_infRate=",infRate,"_",estimand,".RData")))
 firstNoneffCnt <- round(mean(do.call("c", sapply(out, function(trial){ trial[[1]]$firstNonEffCnt }))),0)
-nInf <- seq(firstNoneffCnt,250,by=20)
+nInf <- seq(firstNoneffCnt,240,by=20)
 
 pHat <- getpHatNonEff(nVec=nInf, randRatioPV=randRatio, upperBound=0.4)
 nVax <- round(pHat*nInf,0)
 nSplitVaxPla <- paste0(nVax,":",nInf-nVax)
 VEhat <- VEbinomModel(pHat, randRatio)*100
 tableInfSplits <- data.frame(nInf, nSplitVaxPla, round(VEhat,0))
-
-# calculate the MC average number of infections (pooled over placebo + 1 vaccine arm) triggering the second high efficacy IA for trials with average VE=20%
-secondHigheffCnt <- round(colMeans(do.call("rbind", lapply(out, function(trial){ trial[[1]]$highEffCnt })))[2],0)
-nInfH <- c(firstNoneffCnt+4*20, secondHigheffCnt)
-
-pHatH <- getpHatHighEff(nVec=nInfH, randRatioPV=randRatio, lowerBound=0.6)
-nVaxH <- round(pHatH*nInfH,0)
-nSplitVaxPlaH <- paste0(nVaxH,":",nInfH-nVaxH)
-VEhatH <- VEbinomModel(pHatH, randRatio)*100
-tableInfSplitsH <- data.frame(nInfH, nSplitVaxPlaH, round(VEhatH,0))
 @
 
 \newpage
@@ -535,16 +521,15 @@ tableInfSplitsH <- data.frame(nInfH, nSplitVaxPlaH, round(VEhatH,0))
 \begin{center}
 <<label=plotNonEffStopBounds, echo=FALSE, fig.width=5, fig.height=3.8>>=
 par(mar=c(5.5,5,1,1), las=1, cex.axis=1.1, cex.lab=1.2)
-plot(-10,0, xlim=c(0,250), ylim=c(-10,20), xaxt="n", xlab="", ylab="", type="n")
+plot(-10,0, xlim=c(0,240), ylim=c(-25,20), xaxt="n", xlab="", ylab="", type="n")
 mtext("Total Number of Infections by Month 18\n(Placebo + 1 Vaccine Arm)", side=1, line=3.5, cex=1.2)
 mtext("Vaccine Efficacy (%)", side=2, line=2.5, cex=1.2, las=0)
-axis(side=1, at=c(0,50,100,150,200,250))
-axis(side=1, at=77)
-axis(side=2, at=seq(-10,20,by=5))
-axis(side=3, at=c(0,50,77,100,150,200,250), labels=FALSE)
-axis(side=4, at=seq(-10,20,by=5), labels=FALSE)
+axis(side=1, at=seq(0,240,by=20))
+axis(side=2, at=seq(-25,20,by=5))
+axis(side=3, at=seq(0,240,by=20), labels=FALSE)
+axis(side=4, at=seq(-25,20,by=5), labels=FALSE)
 for (i in 1:length(nInf)){
-  segments(x0=nInf[i], y0=-20, y1=VEhat[i], lwd=2, col="darkred")  
+  segments(x0=nInf[i], y0=-30, y1=VEhat[i], lwd=2, col="darkred")  
 }
 points(nInf, VEhat, pch=19, col="darkred", cex=0.6)
 lines(nInf, VEhat, col="darkred")
@@ -561,39 +546,7 @@ print(xtable(tableInfSplits,
       include.rownames=FALSE,
       include.colnames=FALSE,
       hline.after=c(-1,0),
-      add.to.row=list(pos=list(0,NROW(tableInfSplits)), command=c("\\multicolumn{3}{c}{Non-Efficacy Stopping$^{\\ast}$}\\\\\n\\hline Total\\TT & Infections & $\\widehat{\\textrm{VE}}$\\\\\n Infections & Split V:P & (\\%)\\\\\n", "\\hline \\multicolumn{3}{c}{\\footnotesize $^{\\ast}$Ave VE$=$20\\%, halved in first 6 mo.}"))
-      )
-@
-
-\begin{figure}[H]
-\begin{center}
-<<label=plotHighEffStopBounds, echo=FALSE, fig.width=5, fig.height=3.8>>=
-par(mar=c(5.5,5,1,1), las=1, cex.axis=1.1, cex.lab=1.2)
-plot(-10,0, xlim=c(0,250), ylim=c(65,90), xaxt="n", xlab="", ylab="", type="n")
-mtext("Total Number of Infections\n(Placebo + 1 Vaccine Arm)", side=1, line=3.5, cex=1.2)
-mtext("Vaccine Efficacy (%)", side=2, line=2.5, cex=1.2, las=0)
-axis(side=1, at=c(0,50,100,150,200,250))
-axis(side=3, at=c(0,50,100,150,200,250), labels=FALSE)
-axis(side=4, at=seq(65,90,by=5), labels=FALSE)
-for (i in 1:length(nInf)){
-  segments(x0=nInfH[i], y0=VEhatH[i], y1=100, lwd=2, col="darkred")  
-}
-points(nInfH, VEhatH, pch=19, col="darkred", cex=0.6)
-lines(nInfH, VEhatH, col="darkred")
-text(10, 83, "High Efficacy\nStopping Boundaries", adj=0, cex=1.1, font=2, col="blue")
-@
-\end{center}
-\end{figure}
-
-<<label=tableHighEffInfSplits, results='asis', echo=FALSE>>=
-print(xtable(tableInfSplitsH,
-             align=rep("c",4),
-             digits=rep(0,4)
-             ), 
-      include.rownames=FALSE,
-      include.colnames=FALSE,
-      hline.after=c(-1,0),
-      add.to.row=list(pos=list(0,NROW(tableInfSplitsH)), command=c("\\multicolumn{3}{c}{High Efficacy Stopping$^{\\ast}$}\\\\\n\\hline Total\\TT & Infections & $\\widehat{\\textrm{VE}}$\\\\\n Infections & Split V:P & (\\%)\\\\\n", "\\hline \\multicolumn{3}{c}{\\footnotesize $^{\\ast}$Ave VE$=$20\\%, halved in first 6 mo.}"))
+      add.to.row=list(pos=list(0,NROW(tableInfSplits)), command=c("\\multicolumn{3}{c}{Non-Efficacy Stopping$^{\\ast}$}\\\\\n\\hline Total\\TT & Infections & $\\widehat{\\textrm{VE}}^{\\dagger}$\\\\\n Infections & Split V:P & (\\%)\\\\\n", "\\hline \\multicolumn{3}{l}{\\footnotesize $^{\\ast}$Ave VE$=$20\\%, halved in first 6 mo.}\\\\\n\\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$Based on a binomial model}"))
       )
 @
 
