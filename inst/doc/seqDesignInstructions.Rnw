@@ -20,7 +20,6 @@
 %\VignetteIndexEntry{Instructions for Generating the Output PDF Report}
 
 \begin{document}
-\SweaveOpts{concordance=TRUE}
 \pagestyle{empty}
 \begin{center}
 {\LARGE \textbf{Instructions for Using `seqDesign' and Generating Output Tables and Figures Describing Operating Characteristics of the Trial Design}\bigskip\medskip\\

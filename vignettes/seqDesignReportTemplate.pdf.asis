@@ -1,3 +1,9 @@
+%% $Id: entropy_np.Rnw,v 1.43 2010/02/18 14:43:37 jracine Exp jracine $
+
+%\VignetteEngine{R.rsp::asis}
+%\VignetteIndexEntry{Operating Characteristics of the Specified Trial Design}
+%\VignettePackage{seqDesign}
+
 \documentclass[11pt]{article}
 
 \usepackage{amsmath, amsthm, amssymb}
@@ -21,6 +27,7 @@
 \newcommand\TT{\rule{0pt}{2.9ex}}
 
 \begin{document}
+\SweaveOpts{concordance=TRUE}
 \begin{center}
 {\LARGE Operating Characteristics of the Specified Trial Design}
 \end{center}
