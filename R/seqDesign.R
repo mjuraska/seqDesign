@@ -593,6 +593,34 @@ gcd <- function(nvec) {
 ##             smallest multiple of the minimum block size that lies in the region
 ##             (if any) - or NA if none do.
 ##             
+
+#' Determine block size for use in blocked randomization
+#'
+#' \code{getBlockSize} returns the minimum block size (possibly within a specified range) that is compatible with a trial's overall treatment assignment totals.
+#' 
+#' @param nvec vector specifying the number of participants to be assigned to each treatment group.  The vector should have one component per group, so that its length equals number of groups. The sum of \code{nvec} should equal the total enrollment for the trial.
+#' @param range (Optional) vector of length two giving the lower and upper bounds (respectively) on block sizes that the user wishes to consider.
+#' 
+#' @details The ordering of the components of \code{nvec} is not important, so using \code{nvec = c(x,y,z)} will produce the same results as using \code{nvec = c(z,x,y)}.
+#' 
+#' In block randomization one does not necessarily want the smallest block size, which is the reason for the existance of the \code{range} argument.  For example, a trial with a 1:1 randomization allocation between two groups would have a minimum block size of 2, which most people would consider to be too small.  So a typical usage of \code{getBlockSize} would be to use \code{range} to set a minimum acceptable block size, through use of vector of form \code{c(lowerBound, Inf)}.  A large trial should probably have a block size on the order of 10-20 or larger, depending on factors including the total trial size and speed of enrollment, so setting a minimum is a good idea.
+#'
+#' @return An integer or NA.  If the user does not specify \code{range}, then the function will always return an integer, which is the smallest block size compatible with the specified vector of treatment group sizes.  If the user \emph{has} specified the \code{range}, then the function adds the further constraint that the block size must lie in the closed interval given by \code{range} (i.e., the block size must be greater-than-or-equal-to \code{range[1]} and less-than-or-equal-to \code{range[2]}).  If there are no compatible block sizes that lie in the given interval, then an NA is returned.
+#' 
+#' Note that the value returned is the \strong{minimum} block size that is compatible, not necessarily the only one. Any other compatible block sizes (if any exist) will be integer multiples of the minimum size.  You can check the feasibility of various integer multiples by seeing if they divide evenly into the total trial size (i.e., into the sum of \code{nvec}).
+#'
+#' @examples 
+#'
+#' getBlockSize(nvec = c(375, 375) ) 
+#' ## specify a minimum block size of 10 (no maximum)
+#' getBlockSize(nvec = c(375, 375), range = c(10, Inf) ) 
+#' 
+#' getBlockSize( nvec = c(30, 510, 390) )
+#' ## require a minimum block size of 10 and maximum of 30 
+#' ## (not possible with this nvec, so function returns NA)
+#' getBlockSize( nvec = c(30, 510, 390), range = c(10, 30) )
+#' 
+#' @export
 getBlockSize <- function(nvec, range=c(0,Inf)) {
 
     minBlk <- sum( round(nvec) / gcd(nvec) )
@@ -1568,7 +1596,87 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
 }
 
 
-
+#' Simulation of Multi-Arm Randomized Phase IIb/III  Efficacy Trials with Time-to-Event Endpoints
+#'
+#' \code{simTrial} generates independent time-to-event data-sets according to a user-specified trial design. The user makes assumptions about the enrollment, dropout, and infection processes in each treatment arm.
+#'
+#' @param N a numeric vector specifying the numbers of enrolled trial participants per treatment arm. The length of \code{N} equals the total number of treatment arms, and the first component of \code{N} represents the control arm.
+#' @param aveVE a numeric vector containing, for each treatment arm in \code{N}, a time-averaged vaccine efficacy (VE), defined as the weighted average of VEs in the time intervals specified by \code{vePeriods}. If \code{VEmodel = "half"}, VE is halved in the initial interval, the full VE is applied in the second interval, and \code{aveVE} is applied thereafter. The components of \code{N} and \code{aveVE} correspond to each other.
+#' @param VEmodel a character string specifying whether VE is assumed constant over time (option "\code{constant}") or halved in the initial time interval as defined in \code{vePeriods} (option "\code{half}"). Only the first character is necessary.
+#' @param vePeriods a numeric vector defining start times (in weeks) of time intervals with (potentially) distinct VE levels depending on the choice of the \code{VEmodel}
+#' @param enrollPeriod the final week of the enrollment period
+#' @param enrollPartial the final week of the portion of the enrollment period with a reduced enrollment rate defined by \code{enrollPartialRelRate}
+#' @param enrollPartialRelRate a non-negative value characterizing the fraction of the weekly enrollment rate governing enrollment from week 1 until week \code{enrollPartial}
+#' @param dropoutRate a (prior) annual dropout rate
+#' @param infecRate a (prior) annual infection rate in the control arm
+#' @param fuTime a follow-up time (in weeks) of each participant
+#' @param visitSchedule a numeric vector listing the visit weeks at which testing for the endpoint is conducted
+#' @param missVaccProb a numeric vector with conditional probabilities of having missed a vaccination given the follow-up time exceeds \code{VEcutoffWeek} weeks. For each component, a separate per-protocol indicator is generated. Each per-protocol cohort includes subjects with (i) a non-missing vaccination, and (ii) follow-up time exceeding \code{VEcutoffWeek} weeks. If \code{NULL}, no per-protocol indicators are included.
+#' @param VEcutoffWeek a time cut-off (in weeks); the follow-up time exceeding \code{VEcutoffWeek} weeks is required for inclusion in the per-protocol cohort
+#' @param nTrials the number of trials to be simulated
+#' @param blockSize a constant block size to be used in permuted-block randomization. The choice of \code{blockSize} requires caution to achieve the desired balance of treatment assignments within a block.
+#' @param stage1 the final week of stage 1 in a two-stage trial
+#' @param saveDir a character string specifying a path for the output directory. If supplied, the output is saved as an \code{.RData} file in the directory; otherwise the output is returned as a list.
+#' @param verbose a logical value indicating whether information on the output directory and file name should be printed out (default is \code{TRUE})
+#' @param randomSeed sets seed of the random number generator for simulation reproducibility
+#'
+#' @details All time variables use week as the unit of time. Month is defined as 52/12 weeks.
+#'
+#' The prior weekly enrollment rate is calculated based on the duration of the enrollment periods with reduced/full enrollment rates and the total number of subjects to be enrolled.
+#' 
+#' The weekly enrollment, dropout and infection rates used for generating trial data are sampled from specified prior distributions (the prior annual dropout and infection probabilities are specified by the user). The default choice considers non-random point-mass distributions, i.e., the prior rates directly govern the accumulation of trial data.
+#'  
+#' Subjects' enrollment is assumed to follow a Poisson process with a time-varying rate (the argument \code{enrollPartialRelRate} characterizes a reduced enrollment rate applied to weeks 1 through \code{enrollPartial}, i.e., full enrollment starts at week \code{enrollPartial}+1). The number of enrolled subjects is determined by the vector \code{N}.
+#'  
+#' Dropout times are assumed to follow an exponential distribution where the probability of a dropout within 1 week is equal to \code{dropoutRate}/52.
+#'  
+#' Permuted-block randomization is used for assigning treatment labels. If left unspecified by the user, an appropriate block size, no smaller than 10, will computed and used.  The function \code{getBlockSize} can be used to determine appropriate block sizes (see help(getBlockSize)).
+#'  
+#' Infection times are generated following the VE schedule characterized by \code{aveVE}, \code{VEmodel} and \code{vePeriods}. Independent exponential times are generated within each time period of constant VE, and their minimum specifies the right-censored infection time. Exponential rates are chosen that satisfy the user-specified requirements on the treatment- and time-period-specific probabilities of an infection within 1 week (in the control arm, the infection probability within 1 week uniformly equals \code{infecRate}/52).
+#'
+#'Infection diagnosis times are calculated according to the \code{visitSchedule}. The observed follow-up time is defined as the minumum of the infection diagnosis time, dropout time, and \code{fuTime}.
+#'  % describe the generation of enrollment, dropout and infection rates from prior distributions to be used for data simulation (sampleRates)
+#'  % describe the data generating process (each step), characterize the distributions/assumptions
+#'
+#' @return If \code{saveDir} is specified, the output list (named \code{trialObj}) is saved as an \code{.RData} file (the output directory path is printed); otherwise it is returned. The output object is a list with the following components:
+#' \itemize{
+#'   \item \code{trialData}: a list with \code{nTrials} components each of which is a \code{data.frame} with at least the variables \code{trt}, \code{entry}, \code{exit}, and \code{event} storing the treatment assignments, enrollment times, study exit times, and event indicators, respectively. The observed follow-up times can be recovered as \code{exit} - \code{entry}. Indicators of belonging to the per-protocol cohort (named \code{pp1}, \code{pp2}, etc.) are included if \code{missVaccProb} is specified.
+#'   \item \code{NinfStage1}: a list whose components are numeric vectors with the numbers of \code{stage1} infections by treatment (\code{[1]} = control arm) for each simulated trial
+#'   \item \code{nTrials}: the number of simulated trials
+#'   \item \code{N}: the total number of enrolled trial participants
+#'   \item \code{nArms}: the number of treatment arms
+#'   \item \code{trtAssgnProbs}: a numeric vector containing the treatment assignment probabilities
+#'   \item \code{blockSize}: the block size used for treatment assignment
+#'   \item \code{fuTime}: the follow-up time (in weeks) of each participant
+#'   \item \code{rates}: a list with three components: the prior weekly enrollment rate (\code{enrollment}), the prior probability of dropout within 1 week (\code{dropout}), and the prior probability of infection within 1 week (\code{infection})
+#'   \item \code{enrollSchedule}: a \code{data.frame} summarizing information on enrollment periods and corresponding relative enrollment rates (relative to the weekly "base" enrollment rate). The column names are \code{start}, \code{end}, and \code{relativeRates}.
+#'   \item \code{VEs}: a list with components being numeric vectors containing VE levels assumed within time periods defined by \code{vePeriods} for each active treatment arm
+#'   \item \code{infecRates}: a \code{data.frame} summarizing information on time periods of distinct VE across all treatment arms. The variables \code{trt}, \code{start}, \code{end}, and \code{relRate} carry treatment assignment labels, first and last week of a time interval, and the pertaining assumed hazard ratio in the given interval.
+#'   \item \code{randomSeed}: the set seed of the random number generator for simulation reproducibility
+#' }
+#' 
+#' @examples 
+#' 
+#' simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2), 
+#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78, 
+#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05, 
+#'                     infecRate=0.04, fuTime=156, 
+#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+#'                     missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
+#'                     blockSize=30, stage1=78, randomSeed=300)
+#'
+#' ### alternatively, to save the .RData output file (no '<-' needed):
+#' ###
+#' ### simTrial(N=c(1400, rep(1000, 2)), aveVE=seq(0, 0.4, by=0.2), VEmodel="half", 
+#' ###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
+#' ###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
+#' ###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
+#' ###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+#' ###          blockSize=30, stage1=78, saveDir="./", randomSeed=300)
+#'
+#' @seealso \code{\link{monitorTrial}}, \code{\link{censTrial}}, and \code{\link{rankTrial}}
+#' 
+#' @export
 simTrial <- function(N,
                     aveVE,
                     VEmodel=c("half", "constant"),
@@ -1941,6 +2049,77 @@ getInfecCntFirstNonEff <-
     return( N1 ) 
   }
 
+
+#' Generation of Pre-Unblinded Follow-Up Data-Sets by Applying the Monitoring Outcomes
+#' 
+#' \code{censTrial} `correctly censors' treatment arms in data-sets generated by \code{simTrial} by including pre-unblinded follow-up data only according to the monitoring conclusions as reported by \code{monitorTrial}.
+#' 
+#' @param dataFile if \code{saveDir = NULL}, a list returned by \code{simTrial}; otherwise a name (character string) of an \code{.RData} file created by \code{simTrial}
+#' @param monitorFile if \code{saveDir = NULL}, a list returned by \code{monitorTrial}; otherwise a name (character string) of an \code{.RData} file created by \code{monitorTrial}
+#' @param stage1 the final week of stage 1 in a two-stage trial
+#' @param stage2 the final week of stage 2 in a two-stage trial, i.e., the maximum follow-up time 
+#' @param saveDir a character string specifying a path for both \code{dataFile} and \code{monitorFile}. If supplied, the output is also saved as an \code{.RData} file in this directory; otherwise the output is returned as a list.
+#' @param verbose a logical value indicating whether information on the output directory and file name should be printed out (default is \code{TRUE})
+#' 
+#' @details All time variables use week as the unit of time. Month is defined as 52/12 weeks.
+#' 
+#' The following censoring rules are applied to each data-set generated by \code{simTrial}:
+#' \itemize{
+#'   \item If no vaccine arm registers efficacy or high efficacy in Stage 1, the placebo arm is censored on the date when the last vaccine arm hits the harm or non-efficacy boundary.
+#'   \item If a vaccine arm hits the harm boundary, censor the arm immediately.
+#'   \item If a vaccine arm hits the non-efficacy boundary, censor the arm on the earliest date of the two events: (1) the last vaccine arm hits the harm or non-efficacy boundary (if applicable); and (2) all subjects in the vaccine arm have completed the final \code{stage1} visit.
+#' }
+#' 
+#' @return If \code{saveDir} is specified, the output list (named \code{trialListCensor}) is saved as an \code{.RData} file in \code{saveDir} (the path to \code{saveDir} is printed); otherwise it is returned. 
+#' The output object is a list of length equal to the number of simulated trials, each of which is a \code{data.frame} with at least the variables \code{trt}, \code{entry}, \code{exit}, and \code{event} 
+#' storing the treatment assignments, enrollment times, correctly censored study exit times, and event indicators, respectively. If available, indicators belonging to the per-protocol cohort 
+#' (named \code{pp1}, \code{pp2}, etc.) are copied from the uncensored data-sets.
+#' 
+#' @examples
+#' simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2), 
+#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78, 
+#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05, 
+#'                     infecRate=0.04, fuTime=156, 
+#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+#'                     missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
+#'                     stage1=78, randomSeed=300)
+#' 
+#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
+#'                             harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+#'                             minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, 
+#'                             nonEffInterval=20, lowerVEnoneff=0, upperVEnoneff=0.4, 
+#'                             highVE=0.7, stage1VE=0, lowerVEuncPower=0, 
+#'                             alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+#'                             alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26)
+#'
+#' censData <- censTrial(dataFile=simData, monitorFile=monitorData, stage1=78, stage2=156)
+#' 
+#' ### alternatively, to save the .RData output file (no '<-' needed):
+#' ###
+#' ### simTrial(N=c(1400, rep(1000, 2)), aveVE=seq(0, 0.4, by=0.2), VEmodel="half", 
+#' ###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
+#' ###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
+#' ###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
+#' ###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+#' ###          stage1=78, saveDir="./", randomSeed=300)
+#' ###
+#' ### monitorTrial(dataFile=
+#' ###          "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
+#' ###          stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+#' ###          minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, nonEffInterval=20, 
+#' ###          lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, stage1VE=0, 
+#' ###          lowerVEuncPower=0, alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+#' ###          alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26, saveDir="./")
+#' ###
+#' ### censTrial(dataFile=
+#' ###          "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData",
+#' ###          monitorFile=
+#' ###          "monitorTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04_cuminc.RData",
+#' ###          stage1=78, stage2=156, saveDir="./")
+#'  
+#' @seealso \code{\link{simTrial}}, \code{\link{monitorTrial}}, and \code{\link{rankTrial}}
+#' 
+#' @export
 censTrial <- function(dataFile,
                       monitorFile,
                       stage1,
@@ -2088,6 +2267,92 @@ censTrial <- function(dataFile,
 }
 
 
+#' Ranking and Selection, and Head-to-Head Comparison of Individual and Pooled Treatment Arms
+#' 
+#' \code{rankTrial} assesses the probability of correctly selecting the winning most efficacious (individual and/or pooled) treatment arm, and assesses power to detect relative treatment efficacy in head-to-head comparisons of (individual and/or pooled) treatment arms.
+#'
+#' @param censFile if \code{saveDir = NULL}, a list returned by \code{censTrial}; otherwise a name (character string) of an \code{.RData} file created by \code{censTrial}
+#' @param idxHighestVE an integer value identifying the treatment (vaccine) arm with the true highest VE(0--\code{stage2})
+#' @param headHead a matrix (\code{ncol = 2}) of treatment arm indices for head-to-head comparisons, where the treatment with higher efficacy is listed first in each row
+#' @param poolHead a matrix (\code{ncol} equals 3 or 4) of treatment arm indices for pooled-arm comparisons, where the pooled treatment with higher efficacy pooled over the first two columns is compared with the (pooled) treatment defined by columns 3 and onward. Ranking and selection of pooled arms is performed separately for each row of \code{poolHead}.
+#' @param lowerVE a numeric value defining a `winning' treatment arm as one with sufficient evidence for rejecting the null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \code{lowerVE} x 100\% (typically set equal to 0)
+#' @param stage1 the final week of stage 1 in a two-stage trial
+#' @param stage2 the final week of stage 2 in a two-stage trial, i.e., the maximum follow-up time 
+#' @param alpha one minus the nominal confidence level of the two-sided confidence interval used for testing a null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \eqn{b} x 100\% against an alternative hypothesis H1: VE(0--\code{stage1}) \eqn{>} \eqn{b} x 100\%
+#' @param saveDir a character string specifying a path for \code{censFile}. If supplied, the output is also saved as an \code{.RData} file in this directory; otherwise the output is returned as a list.
+#' @param verbose a logical value indicating whether information on the output directory and file name should be printed out (default is \code{TRUE})
+#' 
+#' @details All time variables use week as the unit of time. Month is defined as 52/12 weeks.
+#' 
+#' The probability of correct treatment selection is defined as the probability that the treatment arm with the highest estimated VE(0--\code{stage2}) is the one with the true highest VE(0--\code{stage2}) and, for this treatment arm, the null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \code{lowerVE} x 100\% is rejected. If \code{poolHead} is specified, the probability of correct pooled treatment selection is assessed for each set of two pooled treatment arms.
+#' 
+#' VE(0--\eqn{t}) is estimated as one minus the ratio of Nelson-Aalen-based cumulative incidence functions. The null hypothesis H0: VE(0--\eqn{t}) \eqn{\le} \eqn{b} x 100\% is rejected if the lower bound of the two-sided (1-\code{alpha}) x 100\% confidence interval for VE(0--\eqn{t}) lies above \eqn{b}.
+#' 
+#' For head-to-head individual and pooled treatment comparisons, powers to reject the null hypotheses that relative VE(0--\code{stage1}) \eqn{\le} 0\% and relative VE(0--\code{stage2}) \eqn{\le} 0\% are assessed using the aforementioned testing rule.
+#' 
+#' @return If \code{saveDir} is specified, the output list (named \code{out}) is saved as an \code{.RData} file in \code{saveDir} (the path to \code{saveDir} is printed); otherwise it is returned. The output object is a list with the following components:
+#' \itemize{
+#'   \item \code{rankSelectPw}: the probability of correct selection of the winning most efficacious individual treatment
+#'   \item \code{headHeadPw}: if \code{headHead} is specified, a matrix of powers to detect relative VE(0--\code{stage1}) (column 1) and relative VE(0--\code{stage2}) (column 2) in head-to-head comparisons of individual treatment arms
+#'   \item \code{poolRankSelectPw}: if \code{poolHead} is specified, a numeric vector of the probabilities of correct selection of the winning most efficacious pooled treatment for each set of pooled treatments
+#'   \item \code{poolHeadPw}: if \code{poolHead} is specified, a matrix of powers to detect relative VE(0--\code{stage1}) (column 1) and relative VE(0--\code{stage2}) (column 2) in head-to-head comparisons of pooled treatment arms
+#' }
+#' 
+#' @examples 
+#' 
+#' simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2), 
+#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78, 
+#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05, 
+#'                     infecRate=0.04, fuTime=156, 
+#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+#'                     missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
+#'                     stage1=78, randomSeed=300)
+#'
+#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
+#'                             harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+#'                             minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, 
+#'                             nonEffInterval=20, lowerVEnoneff=0, upperVEnoneff=0.4, 
+#'                             highVE=0.7, stage1VE=0, lowerVEuncPower=0, 
+#'                             alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+#'                             alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26)
+#'
+#' censData <- censTrial(dataFile=simData, monitorFile=monitorData, stage1=78, stage2=156)
+#'                        
+#' rankData <- rankTrial(censFile=censData, idxHighestVE=2, 
+#'                       headHead=matrix(2:1, nrow=1, ncol=2), lowerVE=0, stage1=78, 
+#'                       stage2=156, alpha=0.05)
+#'
+#' ### alternatively, to save the .RData output file (no '<-' needed):
+#' ###
+#' ### simTrial(N=c(1400, rep(1000, 2)), aveVE=seq(0, 0.4, by=0.2), VEmodel="half", 
+#' ###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
+#' ###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
+#' ###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
+#' ###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+#' ###          stage1=78, saveDir="./", randomSeed=300)
+#' ###
+#' ### monitorTrial(dataFile=
+#' ###          "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
+#' ###          stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+#' ###          minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, nonEffInterval=20, 
+#' ###          lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, stage1VE=0, 
+#' ###          lowerVEuncPower=0, alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+#' ###          alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26, saveDir="./")
+#' ###
+#' ### censTrial(dataFile=
+#' ###  "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData",
+#' ###  monitorFile=
+#' ###  "monitorTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04_cuminc.RData",
+#' ###  stage1=78, stage2=156, saveDir="./")
+#' ###
+#' ### rankTrial(censFile=
+#' ###  "trialDataCens_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04_cuminc.RData",
+#' ###  idxHighestVE=2, headHead=matrix(2:1, nrow=1, ncol=2), lowerVE=0, stage1=78, 
+#' ###  stage2=156, alpha=0.05, saveDir="./")
+#' 
+#' @seealso \code{\link{simTrial}}, \code{\link{monitorTrial}}, and \code{\link{censTrial}}
+#' 
+#' @export
 rankTrial <- function(censFile,
                       idxHighestVE,
                       headHead=NULL,
@@ -2389,6 +2654,83 @@ buildBounds = function(nInfec, highEffBounds) {
 }
 
 
+#' Unconditional Power to Detect Positive Treatment Efficacy in a Per-Protocol Cohort
+#' 
+#' \code{VEpowerPP} computes unconditional power to detect positive treatment (vaccine) efficacy in per-protocol cohorts identified in \code{simTrial}-generated data-sets.
+#'                  
+#' @param dataList if \code{saveDir = NULL}, a list of objects (lists) returned by \code{censTrial}; otherwise a list of \code{.RData} file names (character strings) generated by \code{censTrial}
+#' @param lowerVEuncPower a numeric value specifying a one-sided null hypothesis H0: VE(\code{VEcutoffWeek}--\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\%. Unconditional power (i.e., accounting for sequential monitoring) to reject H0 in the per-protocol cohort is calculated, where the rejection region is defined by the lower bound of the two-sided (1-\code{alphaUncPower}) x 100\% confidence interval for VE(\code{VEcutoffWeek}--\code{stage1}) being above \code{lowerVEuncPower} (typically a number in the 0--0.5 range).
+#' @param alphaUncPower one minus the nominal confidence level of the two-sided confidence interval used to test the one-sided null hypothesis H0: VE(\code{VEcutoffWeek}--\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\% against the alternative hypothesis H1: VE(\code{VEcutoffWeek}--\code{stage1}) \eqn{>} \code{lowerVEuncPower} x 100\%.
+#' @param VEcutoffWeek a cut-off time (in weeks). Only subjects with the follow-up time exceeding \code{VEcutoffWeek} are included in the per-protocol cohort.
+#' @param stage1 the final week of stage 1 in a two-stage trial
+#' @param outName a character string specifying the output \code{.RData} file name. If \code{outName = NULL} but \code{saveDir} is specified, the output file is named \code{VEpwPP.RData}.
+#' @param saveDir a character string specifying a path for the output directory. If supplied, the output is saved as an \code{.RData} file named \code{outName} in the directory; otherwise the output is returned as a list.
+#' @param verbose a logical value indicating whether information on the output directory and file name should be printed out (default is \code{TRUE})
+#' 
+#' @details All time variables use week as the unit of time. Month is defined as 52/12 weeks.
+#' 
+#' A per-protocol cohort indicator is assumed to be included in the \code{simTrial}-generated data-sets, which is ensured by specifying the \code{missVaccProb} argument in \code{simTrial}.
+#' 
+#' VE(\code{VEcutoffWeek}--\code{stage1}) is estimated as one minus the ratio of Nelson-Aalen-based cumulative incidence functions. \code{VEpowerPP} computes power to reject the null hypothesis H0: VE(\code{VEcutoffWeek}--\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\%. H0 is rejected if the lower bound of the two-sided (1-\code{alphaUncPower}) x 100\% confidence interval for VE(\code{VEcutoffWeek}--\code{stage1}) lies above \code{lowerVEuncPower}.
+#'
+#' @return If \code{saveDir} is specified, the output list (named \code{pwList}) is saved as an \code{.RData} file named \code{outName} (or \code{VEpwPP.RData} if left unspecified); otherwise the output list is returned. The output object is a list (of equal length as \code{dataList}) of lists with the following components:
+#' \itemize{
+#'   \item \code{VE}: a numeric vector of VE(\code{VEcutoffWeek}--\code{stage1}) estimates for each missing vaccination probability in \code{missVaccProb} of \code{simTrial}
+#'   \item \code{VEpwPP}: a numeric vector of powers to reject the null hypothesis H0: VE(\code{VEcutoffWeek}--\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\% for each missing vaccination probability in \code{missVaccProb} of \code{simTrial}
+#' }
+#' 
+#' @examples 
+#' simData <- simTrial(N=rep(1000, 2), aveVE=c(0, 0.4), VEmodel="half", 
+#'                     vePeriods=c(1, 27, 79), enrollPeriod=78, 
+#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05, 
+#'                     infecRate=0.04, fuTime=156, 
+#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+#'                     missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
+#'                     stage1=78, randomSeed=300)
+#'
+#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
+#'                             harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+#'                             minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, 
+#'                             nonEffInterval=20, lowerVEnoneff=0, upperVEnoneff=0.4, 
+#'                             highVE=0.7, stage1VE=0, lowerVEuncPower=0, 
+#'                             alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+#'                             alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26)
+#'
+#' censData <- censTrial(dataFile=simData, monitorFile=monitorData, stage1=78, stage2=156)
+#'
+#' VEpwPP <- VEpowerPP(dataList=list(censData), lowerVEuncPower=0, alphaUncPower=0.05,
+#'                     VEcutoffWeek=26, stage1=78)
+#'
+#' ### alternatively, to save the .RData output file (no '<-' needed):
+#' ###
+#' ### simTrial(N=rep(1000, 2), aveVE=c(0, 0.4), VEmodel="half", 
+#' ###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
+#' ###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
+#' ###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
+#' ###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+#' ###          stage1=78, saveDir="./", randomSeed=300)
+#' ###
+#' ### monitorTrial(dataFile=
+#' ###          "simTrial_nPlac=1000_nVacc=1000_aveVE=0.4_infRate=0.04.RData", 
+#' ###          stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+#' ###          minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, nonEffInterval=20, 
+#' ###          lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, stage1VE=0, 
+#' ###          lowerVEuncPower=0, alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+#' ###          alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26, saveDir="./")
+#' ###
+#' ### censTrial(dataFile=
+#' ###  "simTrial_nPlac=1000_nVacc=1000_aveVE=0.4_infRate=0.04.RData",
+#' ###  monitorFile=
+#' ###  "monitorTrial_nPlac=1000_nVacc=1000_aveVE=0.4_infRate=0.04_cuminc.RData",
+#' ###  stage1=78, stage2=156, saveDir="./")
+#' ###
+#' ### VEpowerPP(dataList=
+#' ###  list("trialDataCens_nPlac=1000_nVacc=1000_aveVE=0.4_infRate=0.04_cuminc.RData"),
+#' ###  lowerVEuncPower=0, alphaUncPower=0.05, VEcutoffWeek=26, stage1=78, saveDir="./")
+#' 
+#' @seealso \code{\link{simTrial}}
+#' 
+#' @export
 VEpowerPP <- function( dataList, 
                        lowerVEuncPower, 
                        alphaUncPower, 
@@ -3433,158 +3775,264 @@ censorTrial <- function(d, times, arms=NULL, timeScale=c("calendar","follow-up")
 #################   Begin code for monitorTrial  ################
 
 ## Some arguments described just below the argument list 
-monitorTrial <- 
-    function(
-        dataFile,
-        stage1,
-        stage2,
 
-        ## range over which to "spend" the type-I error specified in argument
-        ## 'harmMonitorRange'.  It should be a vector of length 2 giving the 
-        ## (start, stop) infection-count range over which the type-I error 
-        ## will be spent.  Please note that this argument does *NOT* dictate
-        ## when harm monitoring will END.  The range dictates when it will
-        ## START, and over what range the type-I error will be spread.  If
-        ## you plan to use nonEffStartMethod "FKG" or "fixed" then the 
-        ## 'stop' value of the range, if provided by the user, will not be
-        ## used and need not be specified. It may also be replaced with an NA.
-
-        ## bounds are created.  The 'start' component will determine when 
-        ## harm monitoring beings.
-        harmMonitorRange, 
-
-        ## Total Type I error for potential harm monitoring (per vacc. arm)
-        harmMonitorAlpha=0.05,
-
-        ## 'harmMonitorContol' is a list containing other parameters controlling 
-        ##    the harm monitoring. Currently the only one used in 'maxCnt'.  This
-        ##    *MUST* be specified and represesents the set of infection counts for
-        ##    which harm bounds will be constructed.  Harm monitoring ends when
-        ##    'maxCnt' has been exceeded, whether or not you've reached the
-        ##    criteria for initiaton of non-efficacy monitoring, so you should: 
-        ##    (a) choose a nonEff start method that guarantees starting
-        ##        at/before 'maxCnt', or
-        ##    (b) choose maxCnt to be a value larger than you're non-efficacy
-        ##        starting count will ever be (maybe use 2 or 3 times the 
-        ##        upper range for harm monitoring (harmMonitorRange[2]).
-        ##  If maxCnt is left unspecified, the default value of 
-        ##    3 x harmMonitorRange[2] will be used for it.
-        #harmMonitorControl=list( maxCnt=NULL),
-
-        ## if you have determined the constant alpha value to do the binomial
-        ## 'potential-harm-monitoring' tests at, they you can pass it through
-        ## this argument, in which case argument 'harmMonitorAlpha' need not
-        ## be specified
-        alphaPerTest=NULL,
-
-        ## character vector of methods to use to determine when to start non-efficacy
-        ## monitoring.  Each method requires different input information, and that
-        ## information should be input via the 'nonEffStartParams' argument - which
-        ## should be a list that the specifies the inputs for the method.  Each
-        ## method's input requirements should be specified in the documentation.
-        ##
-        ## Methods:
-        ##  FKG - the starting method suggested in Freidlin, Korn and Gray's 2010
-        ##        'Clinical Trials' paper:  "A general inefficacy interim 
-        ##        monitoring rule for randomized clinical trials"
-        ##        It boils down to start monitoring at the earlier infection count
-        ##        such that an estimated effect <= 0 would cause the trial to
-        ##        stop.  In our code that translates to a 95% CI (based on the
-        ##        asymptotic variance of the log-rank statistic) around an 
-        ##        estimated VE of 0% would exclude the VE specified by parameter
-        ##        'upperVEnonEff'.  The expectation is that this will be harmonized
-        ##        with the non-efficacy monitoring, and so will use the arguments
-        ##        'upperVEnonEff' 'alphaNoneff' from argument list.  However, should
-        ##        you want to use different values, you may do say by passing them
-        ##        via the 'nonEffStartParams' argument list.  The same naming should
-        ##        be used within the list.
-        ##      Parameters: upperVEnonEff alphaNoneff  
-        ##  
-        ##  fixed - Starts at the infection count specified by paramter 'N1'. 
-        ##          If 'N1' is set to 75, then non-efficacy always begins at the
-        ##          75th infection 
-        ##      Parameter: N1
-        ##
-        ##  ? - method specifies start time by a combination of variables:
-        ##      Parameters:
-        ##         minCnt - gives the minimum (combined) infection count at which
-        ##               monitoring can being
-        ##         maxCnt - gives the maximum (combined) infection count at which
-        ##               monitoring can being (it will begin at this count 
-        ##               whether or not the other criteria are satisfied).
-        ##               [OPTIONAL]
-        ##         lagTimes, lagMinCnts - these arguments are paired, each can
-        ##               be a vector of length > 1. 'lagMinCnts' is a vector
-        ##               if infection counts that are required to occur 'later
-        ##               in the trial' (larger value of follow-up time) than
-        ##               the associated time given in vector 'lagTimes'.
-        ##               E.g if lagTimes=c(26,39) and lagMinCnts=c(25,5) this
-        ##               says we cannot start until we've reached 25 infections
-        ##               that have occurred *after* (not including) week 26, and
-        ##               also 5 that have occurred after week 39.
-        ##       NOTE: Parameters: minCnt, lagTimes and lagMinCnts are all required,
-        ##               (minCnt can be set to 0 if desired); maxCnt is optional
-        ##
-        ##
-        ##  custom - [ NOT YET IMPLEMENTED ] You provide the function and the parameters
-        ##      Parameters: 'Func' (your function) + whatever parameters your function needs
-        ##
-        ##  old - the old 'seqDesign' starting method.  Severely deprecated.
-        ##      Parameters: minCnt, minPct, week1, week2
-        ##
-        nonEffStartMethod=c("FKG", "fixed", "?", "old"),
-
-        ## A *list* (not a vector) of parameters needed by the method specified
-        ## in argument 'nonEffStartMethod'.  Some methods have defaults in place,
-        ## for those you do not need to use 'nonEffStartParams' unless you want 
-        ## values other than the defaults.
-        nonEffStartParams=NULL,
-
-        #minCnt,
-        #maxCnt, ## the maximum start of non-efficacy monitoring
-        #minPct,
-        #week1,
-        #minCnt2,
-        #week2,
-
-        nonEffInterval,
-        nonEffIntervalUnit=c("counts","time"),
-
-        ## lowerVEnoneff is not required.  Specify only if you want this
-        ## condition as part of your monitoring.
-        lowerVEnoneff=NULL,
-        upperVEnoneff,
-        highVE, 
-        stage1VE,
-        lowerVEuncPower=NULL,  
-
-        ## VE alternatives to test for at the end of the trial
-        altVE=NULL,
-
-        alphaNoneff,
-        alphaHigh,
-        alphaStage1,
-        alphaUncPower=NULL,
-        alphaAltVE,
-
-        estimand=c("combined", "cox", "cuminc"),
-
-        ## 'laggedMonitoring' replaces argument 'post6moMonitor' and 
-        ## 'lagTime' replaces 'VEcutoffWeek'
-        ## The latter two args will remain for now but are deprecated
-        laggedMonitoring=FALSE,
-        lagTime,
-
-        ## The following arguments are being phased out, please use args
-        ## 'laggedMonitoring' and 'lagTime' in place of these.  
-        ## A warning will be issued if these are used
-        post6moMonitor = FALSE,
-        VEcutoffWeek,
-
-        saveFile= NULL,
-        saveDir = NULL,
-        verbose = TRUE )
-{
+#' Group Sequential Monitoring of Simulated Efficacy Trials for the Event of Potential Harm, Non-Efficacy, and High Efficacy
+#'
+#' \code{monitorTrial} applies a group sequential monitoring procedure to data-sets generated by \code{simTrial}, which may result in modification or termination of each simulated trial.
+#'
+#' @param dataFile if \code{saveDir = NULL}, a list returned by \code{simTrial}; otherwise a name (character string) of an \code{.RData} file created by \code{simTrial}
+#' @param stage1 the final week of stage 1 in a two-stage trial
+#' @param stage2 the final week of stage 2 in a two-stage trial, i.e., the maximum follow-up time
+#' @param harmMonitorRange a 2-component numeric vector specifying the range for pooled numbers of infections (pooled over the placebo and vaccine arm accruing infections the fastest) for which potential-harm stopping boundaries will be computed
+#' @param alphaPerTest a per-test nominal/unadjusted alpha level for potential-harm monitoring. If \code{NULL}, a per-test alpha level is calculated that yields a cumulative alpha of 0.05 at the final potential-harm analysis.
+#' @param minCnt a minumum number of infections (pooled over the placebo and vaccine arm accruing infections the fastest) required for the initiation of non-efficacy monitoring [criterion 1]
+#' @param minPct a minimum proportion of infections after \code{week1} (pooled over the placebo and vaccine arm accruing infections the fastest) required for the initiation of non-efficacy monitoring [criterion 2]
+#' @param week1 a time point (in weeks) used, together with \code{minPct}, for defining criterion 2
+#' @param minCnt2 a minumum number of infections after \code{week2} (pooled over the placebo and vaccine arm accruing infections the fastest) required for the initiation of non-efficacy monitoring [criterion 3]
+#' @param week2 a time point (in weeks) used, together with \code{minCnt2}, for defining criterion 3
+#' @param nonEffInterval a number of infections between two adjacent non-efficacy interim analyses
+#' @param lowerVEnoneff specifies criterion 1 for declaring non-efficacy: the lower bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{lowerVEnoneff} (typically set equal to 0)
+#' @param upperVEnoneff specifies criterion 2 for declaring non-efficacy: the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{upperVEnoneff} (typically a number in the 0--0.5 range)
+#' @param highVE specifies a criterion for declaring high-efficacy: the lower bound of the two-sided (1-\code{alphaHigh}) x 100\% confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range)
+#' @param stage1VE specifies a criterion for advancement of a treatment's evaluation into Stage 2: the lower bound of the two-sided (1-\code{alphaStage1}) x 100\% confidence interval for the VE estimand lies above \code{stage1VE} (typically set equal to 0)
+#' @param lowerVEuncPower a numeric vector with each component specifying a one-sided null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\%. Unconditional power (i.e., accounting for sequential monitoring) to reject each H0 is calculated, where the rejection region is defined by the lower bound of the two-sided (1-\code{alphaUncPower}) x 100\% confidence interval for the VE estimand being above the respective component of \code{lowerVEuncPower} (typically values in the 0--0.5 range).
+#' @param alphaNoneff one minus the nominal confidence level of the two-sided confidence interval used for non-efficacy monitoring
+#' @param alphaHigh one minus the nominal confidence level of the two-sided confidence interval used for high efficacy monitoring
+#' @param alphaStage1 one minus the nominal confidence level of the two-sided confidence interval used for determining whether a treatment's evaluation advances into Stage 2
+#' @param alphaUncPower one minus the nominal confidence level of the two-sided confidence interval used to test one-sided null hypotheses H0: VE(0-\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\% against alternative hypotheses H1: VE(0--\code{stage1}) \eqn{>} \code{lowerVEuncPower} x 100\%. The same nominal confidence level is applied for each component of \code{lowerVEuncPower}.
+#' @param estimand a character string specifying the choice of VE estimand(s) used in non- and high efficacy monitoring, advancement rule for Stage 2, and unconditional power calculations. Three options are implemented: (1) the `pure' Cox approach (\code{"cox"}), where VE is defined as 1-hazard ratio (treatment/control) and estimated by the maximum partial likelihood estimator in the Cox model; (2) the `pure' cumulative incidence-based approach (\code{"cuminc"}), where VE is defined as 1-cumulative incidence ratio (treatment/control) and estimated by the transformation of the Nelson-Aalen estimator for the cumulative hazard function; and (3) the combined approach (\code{"combined"}), where both aforementioned VE estimands are used for non-efficacy monitoring while the cumulative VE estimand is used for all other purposes. Only the first three characters are necessary.
+#' @param post6moMonitor a logical value indicating whether, additionally, post-6 months non-efficacy monitoring shoud be used as a more conservative non-efficacy monitoring approach. If \code{TRUE} and \code{estimand = "combined"}, the cumulative VE estimand is considered only for non-efficacy monitoring.
+#' @param VEcutoffWeek a time point (in weeks) defining the per-protocol VE estimand, i.e., VE(\code{VEcutoffWeek}--\code{stage1}). This VE estimand is also used in post-6 months non-efficacy monitoring. It is typically chosen as the date of the last immunization or the date of the visit following the last immunization.
+#' @param saveDir a character string specifying a path for \code{dataFile}. If supplied, the output is also saved as an \code{.RData} file in this directory; otherwise the output is returned as a list.
+#' @param verbose a logical value indicating whether information on the output directory, file name, and monitoring outcomes should be printed out (default is \code{TRUE})
+#'
+#' @details All time variables use week as the unit of time. Month is defined as 52/12 weeks.
+#'
+#' Potential harm monitoring starts at the \code{harmMonitorRange[1]}-th infection pooled over the placebo group and the vaccine regimen that accrues infections the fastest. The potential harm analyses continue at each additional infection until the first interim analysis for non-efficacy. The monitoring is implemented with exact one-sided binomial tests of H0: \eqn{p \le p0} versus H1: \eqn{p > p0}, where \eqn{p} is the probability that an infected participant was assigned to the vaccine group, and \eqn{p0} is a fixed constant that represents the null hypothesis that an infection is equally likely to be assigned vaccine or placebo. Each test is performed at the same prespecified nominal/unadjusted alpha-level (\code{alphaPerTest}), chosen based on simulations such that, for each vaccine regimen, the overall type I error rate by the \code{harmMonitorRange[2]}-th arm-pooled infection (i.e., the probability that the potential harm boundary is reached when the vaccine is actually safe, \eqn{p = p0}) equals 0.05.
+#' 
+#' Non-efficacy is defined as evidence that it is highly unlikely that the vaccine has a beneficial effect measured as VE(0--\code{stage1}) of \code{upperVEnoneff} x 100\% or more. The non-efficacy analyses for each vaccine regimen will start at the first infection at or after the \code{minCnt}-th (pooled over the vaccine and placebo arm) when at least \code{minPct} x 100\% of the accumulated infections are diagnosed after \code{week1} and at least \code{minCnt2} infections are diagnosed after \code{week2}. Stopping for non-efficacy will lead to a reported two-sided (1-\code{alphaNoneff}) x 100\% CI for VE(0--\code{stage1}) with the lower confidence bound below \code{lowerVEnoneff} and the upper confidence bound below \code{upperVEnoneff}, where \code{estimand} determines the choice of the VE(0--\code{stage1}) estimand. This approach is similar to the inefficacy monitoring approach of Freidlin B, Korn EL, Gray R. (2010) A general inefficacy interim monitoring rule for randomized trials. Clinical Trials, 7:197-208. If \code{estimand = "combined"}, stopping for non-efficacy will lead to reported (1-\code{alphaNoneff}) x 100\% CIs for both VE parameters with lower confidence bounds below \code{lowerVEnoneff} and upper confidence bounds below \code{upperVEnoneff}. If \code{post6moMonitor = TRUE}, stopping for non-efficacy will lead to reported (1-\code{alphaNoneff}) x 100\% CIs for both VE(0--\code{stage1}) and VE(\code{VEcutoffWeek}--\code{stage1}) with lower confidence bounds below \code{lowerVEnoneff} and upper confidence bounds below \code{upperVEnoneff}.
+#' 
+#' High efficacy monitoring allows early detection of a highly protective vaccine if there is evidence that VE(0--\code{stage2}) \eqn{>} \code{highVE} x 100\%, based on two planned interim analyses, the first at the time of the fifth planned non-efficacy analysis, and the second at the expected mid-point between the number of infections at the first interim analysis and the number of infections observed at the end of \code{stage2}. While monitoring for potential harm and non-efficacy restricts to \code{stage1} infections, monitoring for high efficacy counts all infections during \code{stage1} or \code{stage2}, given that early stopping for high efficacy would only be warranted under evidence for durability of the efficacy.
+#' 
+#' The following principles and rules are applied in the monitoring procedure:
+#' \itemize{
+#'   \item Exclude all follow-up data from the analysis post-unblinding (and include all data pre-unblinding).
+#'   \item The monitoring is based on modified ITT analysis, i.e., all subjects documented to be free of the study endpoint at baseline are included and analyzed according to the treatment assigned by randomization, ignoring how many vaccinations they received (only pre-unblinding follow-up included).
+#'   \item If a vaccine hits the harm boundary, immediately discontinue vaccinations and accrual into this vaccine arm, and unblind this vaccine arm (continue post-unblinded follow-up until the end of Stage 1 for this vaccine arm).  
+#'   \item If a vaccine hits the non-efficacy boundary, immediately discontinue vaccinations and accrual into this vaccine arm, keep blinded and continue follow-up until the end of Stage 1 for this vaccine arm. 
+#'   \item If and when the last vaccine arm hits the non-efficacy (or harm) boundary, discontinue vaccinations and accrual into this vaccine arm, and unblind (the trial is over, completed in Stage 1).
+#'   \item Stage 1 for the whole trial is over on the earliest date of the two events: (1) all vaccine arms have hit the harm or non-efficacy boundary; and (2) the last enrolled subject in the trial reaches the final \code{stage1} visit.
+#'   \item Continue blinded follow-up until the end of Stage 2 for each vaccine arm that reaches the end of \code{stage1} with a positive efficacy (as defined by \code{stage1VE}) or high efficacy (as defined by \code{highVE}) result.
+#'   \item If at least one vaccine arm reaches the end of \code{stage1} with a positive efficacy or high efficacy result, continue blinded follow-up in the placebo arm until the end of Stage 2.
+#'   \item Stage 2 for the whole trial is over on the earliest date of the two events: (1) all subjects in the placebo arm and each vaccine arm that registered efficacy or high efficacy in \code{stage1} have failed or been censored; and (2) all subjects in the placebo arm and each vaccine arm that registered efficacy or high efficacy in \code{stage1} have completed the final \code{stage2} visit.
+#' }
+#' 
+#' The above rules have the following implications:
+#' \itemize{
+#'   \item If a vaccine hits the non-efficacy boundary but Stage 1 for the whole trial is not over, then one includes in the analysis all follow-up through the final \code{stage1} visit for that vaccine regimen, including all individuals accrued up through the date of hitting the non-efficacy boundary (which will be the total number accrued to this vaccine arm).
+#'   \item If a vaccine hits the harm boundary, all follow-up information through the date of hitting the harm boundary is included for this vaccine; no follow-up data are included after this date.
+#'   \item If and when the last vaccine arm hits the non-efficacy (or harm) boundary, all follow-up information through the date of hitting the non-efficacy (or harm) boundary is included for this vaccine; no follow-up data are included after this date.
+#' }
+#' 
+#' @return If \code{saveDir} is specified, the output list (named \code{out}) is saved as an \code{.RData} file in \code{saveDir} (the path to \code{saveDir} is printed); otherwise it is returned. The output object is a list of length equal to the number of simulated trials, each of which is a list of length equal to the number of treatment arms, each of which is a list with (at least) the following components:
+#' \itemize{
+#'   \item \code{boundHit}: a character string stating the monitoring outcome in this treatment arm, i.e., one of \code{"Harm"}, \code{"NonEffInterim"}, \code{"NonEffFinal"}, \code{"Eff"}, or \code{"HighEff"}. The first four outcomes can occur in Stage 1, whereas the last outcome can combine data over Stage 1 and Stage 2.
+#'   \item \code{stopTime}: the time of hitting a stopping boundary since the first subject enrolled in the trial
+#'   \item \code{stopInfectCnt}: the pooled number of infections at \code{stopTime}
+#'   \item \code{summObj}: a \code{data.frame} containing summary information from each non-/high efficacy interim analysis
+#'   \item \code{finalHRci}: the final CI for the hazard ratio, available if \code{estimand!="cuminc"} and there is at least 1 infection in each arm
+#'   \item \code{firstNonEffCnt}: the number of infections that triggered non-efficacy monitoring (if available)
+#'   \item \code{totInfecCnt}: the total number of \code{stage1} (\code{stage2} if \code{boundHit = "HighEff"}) infections
+#'   \item \code{totInfecSplit}: a table with the numbers of \code{stage1} (\code{stage2} if \code{boundHit = "HighEff"}) infections in the treatment and control arm
+#'   \item \code{lastExitTime}: the time between the first subject's enrollment and the last subject's exiting from the trial
+#' }
+#'
+#' @examples 
+#' simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2), 
+#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78, 
+#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05, 
+#'                     infecRate=0.04, fuTime=156, 
+#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+#'                     missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
+#'                     stage1=78, randomSeed=300)
+#'    
+#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
+#'                             harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+#'                             minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, 
+#'                             nonEffInterval=20, lowerVEnoneff=0, upperVEnoneff=0.4, 
+#'                             highVE=0.7, stage1VE=0, lowerVEuncPower=0, alphaNoneff=0.05,
+#'                             alphaHigh=0.05, alphaStage1=0.05, alphaUncPower=0.05,
+#'                             estimand="cuminc", VEcutoffWeek=26)
+#'    
+#' ### alternatively, to save the .RData output file (no '<-' needed):
+#' ###
+#' ### simTrial(N=c(1400, rep(1000, 2)), aveVE=seq(0, 0.4, by=0.2), VEmodel="half", 
+#' ###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
+#' ###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
+#' ###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
+#' ###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+#' ###          stage1=78, saveDir="./", randomSeed=300)
+#' ###
+#' ### monitorTrial(dataFile=
+#' ###              "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
+#' ###              stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
+#' ###              minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, nonEffInterval=20, 
+#' ###              lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, stage1VE=0, 
+#' ###              lowerVEuncPower=0, alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
+#' ###              alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26, saveDir="./")
+#'
+#' @seealso \code{\link{simTrial}}, \code{\link{censTrial}}, and \code{\link{rankTrial}}
+#'
+#' @export    
+monitorTrial <- function (dataFile,
+                          stage1,
+                          stage2,
+                  
+                          ## range over which to "spend" the type-I error specified in argument
+                          ## 'harmMonitorRange'.  It should be a vector of length 2 giving the 
+                          ## (start, stop) infection-count range over which the type-I error 
+                          ## will be spent.  Please note that this argument does *NOT* dictate
+                          ## when harm monitoring will END.  The range dictates when it will
+                          ## START, and over what range the type-I error will be spread.  If
+                          ## you plan to use nonEffStartMethod "FKG" or "fixed" then the 
+                          ## 'stop' value of the range, if provided by the user, will not be
+                          ## used and need not be specified. It may also be replaced with an NA.
+                  
+                          ## bounds are created.  The 'start' component will determine when 
+                          ## harm monitoring beings.
+                          harmMonitorRange, 
+                  
+                          ## Total Type I error for potential harm monitoring (per vacc. arm)
+                          harmMonitorAlpha=0.05,
+                  
+                          ## 'harmMonitorContol' is a list containing other parameters controlling 
+                          ##    the harm monitoring. Currently the only one used in 'maxCnt'.  This
+                          ##    *MUST* be specified and represesents the set of infection counts for
+                          ##    which harm bounds will be constructed.  Harm monitoring ends when
+                          ##    'maxCnt' has been exceeded, whether or not you've reached the
+                          ##    criteria for initiaton of non-efficacy monitoring, so you should: 
+                          ##    (a) choose a nonEff start method that guarantees starting
+                          ##        at/before 'maxCnt', or
+                          ##    (b) choose maxCnt to be a value larger than you're non-efficacy
+                          ##        starting count will ever be (maybe use 2 or 3 times the 
+                          ##        upper range for harm monitoring (harmMonitorRange[2]).
+                          ##  If maxCnt is left unspecified, the default value of 
+                          ##    3 x harmMonitorRange[2] will be used for it.
+                          #harmMonitorControl=list( maxCnt=NULL),
+                  
+                          ## if you have determined the constant alpha value to do the binomial
+                          ## 'potential-harm-monitoring' tests at, they you can pass it through
+                          ## this argument, in which case argument 'harmMonitorAlpha' need not
+                          ## be specified
+                          alphaPerTest=NULL,
+                  
+                          ## character vector of methods to use to determine when to start non-efficacy
+                          ## monitoring.  Each method requires different input information, and that
+                          ## information should be input via the 'nonEffStartParams' argument - which
+                          ## should be a list that the specifies the inputs for the method.  Each
+                          ## method's input requirements should be specified in the documentation.
+                          ##
+                          ## Methods:
+                          ##  FKG - the starting method suggested in Freidlin, Korn and Gray's 2010
+                          ##        'Clinical Trials' paper:  "A general inefficacy interim 
+                          ##        monitoring rule for randomized clinical trials"
+                          ##        It boils down to start monitoring at the earlier infection count
+                          ##        such that an estimated effect <= 0 would cause the trial to
+                          ##        stop.  In our code that translates to a 95% CI (based on the
+                          ##        asymptotic variance of the log-rank statistic) around an 
+                          ##        estimated VE of 0% would exclude the VE specified by parameter
+                          ##        'upperVEnonEff'.  The expectation is that this will be harmonized
+                          ##        with the non-efficacy monitoring, and so will use the arguments
+                          ##        'upperVEnonEff' 'alphaNoneff' from argument list.  However, should
+                          ##        you want to use different values, you may do say by passing them
+                          ##        via the 'nonEffStartParams' argument list.  The same naming should
+                          ##        be used within the list.
+                          ##      Parameters: upperVEnonEff alphaNoneff  
+                          ##  
+                          ##  fixed - Starts at the infection count specified by paramter 'N1'. 
+                          ##          If 'N1' is set to 75, then non-efficacy always begins at the
+                          ##          75th infection 
+                          ##      Parameter: N1
+                          ##
+                          ##  ? - method specifies start time by a combination of variables:
+                          ##      Parameters:
+                          ##         minCnt - gives the minimum (combined) infection count at which
+                          ##               monitoring can being
+                          ##         maxCnt - gives the maximum (combined) infection count at which
+                          ##               monitoring can being (it will begin at this count 
+                          ##               whether or not the other criteria are satisfied).
+                          ##               [OPTIONAL]
+                          ##         lagTimes, lagMinCnts - these arguments are paired, each can
+                          ##               be a vector of length > 1. 'lagMinCnts' is a vector
+                          ##               if infection counts that are required to occur 'later
+                          ##               in the trial' (larger value of follow-up time) than
+                          ##               the associated time given in vector 'lagTimes'.
+                          ##               E.g if lagTimes=c(26,39) and lagMinCnts=c(25,5) this
+                          ##               says we cannot start until we've reached 25 infections
+                          ##               that have occurred *after* (not including) week 26, and
+                          ##               also 5 that have occurred after week 39.
+                          ##       NOTE: Parameters: minCnt, lagTimes and lagMinCnts are all required,
+                          ##               (minCnt can be set to 0 if desired); maxCnt is optional
+                          ##
+                          ##
+                          ##  custom - [ NOT YET IMPLEMENTED ] You provide the function and the parameters
+                          ##      Parameters: 'Func' (your function) + whatever parameters your function needs
+                          ##
+                          ##  old - the old 'seqDesign' starting method.  Severely deprecated.
+                          ##      Parameters: minCnt, minPct, week1, week2
+                          ##
+                          nonEffStartMethod=c("FKG", "fixed", "?", "old"),
+                  
+                          ## A *list* (not a vector) of parameters needed by the method specified
+                          ## in argument 'nonEffStartMethod'.  Some methods have defaults in place,
+                          ## for those you do not need to use 'nonEffStartParams' unless you want 
+                          ## values other than the defaults.
+                          nonEffStartParams=NULL,
+                  
+                          #minCnt,
+                          #maxCnt, ## the maximum start of non-efficacy monitoring
+                          #minPct,
+                          #week1,
+                          #minCnt2,
+                          #week2,
+                  
+                          nonEffInterval,
+                          nonEffIntervalUnit=c("counts","time"),
+                  
+                          ## lowerVEnoneff is not required.  Specify only if you want this
+                          ## condition as part of your monitoring.
+                          lowerVEnoneff=NULL,
+                          upperVEnoneff,
+                          highVE, 
+                          stage1VE,
+                          lowerVEuncPower=NULL,  
+                  
+                          ## VE alternatives to test for at the end of the trial
+                          altVE=NULL,
+                  
+                          alphaNoneff,
+                          alphaHigh,
+                          alphaStage1,
+                          alphaUncPower=NULL,
+                          alphaAltVE,
+                  
+                          estimand=c("combined", "cox", "cuminc"),
+                  
+                          ## 'laggedMonitoring' replaces argument 'post6moMonitor' and 
+                          ## 'lagTime' replaces 'VEcutoffWeek'
+                          ## The latter two args will remain for now but are deprecated
+                          laggedMonitoring=FALSE,
+                          lagTime,
+                  
+                          ## The following arguments are being phased out, please use args
+                          ## 'laggedMonitoring' and 'lagTime' in place of these.  
+                          ## A warning will be issued if these are used
+                          post6moMonitor = FALSE,
+                          VEcutoffWeek,
+                  
+                          saveFile= NULL,
+                          saveDir = NULL,
+                          verbose = TRUE ) {
   ## selected Arguments
   ##
   ##   lowerVEnoneff: 
