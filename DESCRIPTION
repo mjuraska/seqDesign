@@ -11,4 +11,4 @@ Encoding: UTF-8
 LazyLoad: yes
 VignetteBuilder: knitr, R.rsp
 Suggests: knitr, R.rsp
-RoxygenNote: 6.1.0
+RoxygenNote: 6.1.1
