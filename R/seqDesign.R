@@ -1,3 +1,8 @@
+#' @import stats
+NULL
+#' @import survival
+NULL
+
 globalVariables(c("trialObj","futime","event","exit","trt","totInfec","entry","N",
                   "trialListCensor","out","n","Nvacc","approxOk","V","P","pwList",
                   "N.vax.arms"))
