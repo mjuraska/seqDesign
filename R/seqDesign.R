@@ -2569,39 +2569,6 @@ testVE <- function(datI, lowerVE, stage, alpha){
   return(list(bound=bound, VE=1-FR))
 }
 
-  
-###################################################
-## This function calculates the power for head to head comparison
-headHeadTest = function(datI, headHeadInd, stage1, stage2, nullHR, alpha=0.025) {
-  ## a matrix to store power for head to head comparison 
-  ## column 1 = power for VE(0-18), column 2 = power for VE(0-36)
-  headHeadPw = matrix(0, nrow=nrow(headHeadInd), ncol=2)
-  
-  for (h in 1:nrow(headHeadInd)) {
-    if(ncol(headHeadInd)==2) {  ## 2 columns
-      arm1 = headHeadInd[h,1]
-      arm2 = headHeadInd[h,2]
-    } else {                    ## 3 or 4 column
-      arm1 = headHeadInd[h,1:2]
-      arm2 = headHeadInd[h,3:ncol(headHeadInd)]
-    }
-       
-    testData = subset(datI, trt %in% c(arm1, arm2))
-    
-    ## need to change the index in arm2 to 0
-    testData$trt [testData$trt %in% arm2] = 0 
-    
-    ## power for stage 1
-    bnd = finalLogRankTest(datI=testData, stage =stage1, NullHR=nullHR, alpha=alpha)
-    if (bnd$bound =="Eff") headHeadPw[h, 1] = 1           
-    
-    ## power for stage 2
-    bnd = finalLogRankTest(datI=testData, stage =stage2, NullHR=nullHR, alpha=alpha)
-    if (bnd$bound =="Eff") headHeadPw[h, 2] = 1 
-  }
-  headHeadPw
-}
-
 headTestVE <- function(datI, headHeadInd, stage1, stage2, alpha){
   ## a matrix to store power for head to head comparison 
   ## column 1 = power for VE(0-18), column 2 = power for VE(0-36)
@@ -4718,7 +4685,7 @@ applyStopRules <-
              lowerVE=NULL,  upperVE=NULL, alphaLevel=0.05,
              laggedMonitoring=FALSE,  lagTime=NULL, laggedOnly=FALSE,
              estimand = c("cox","cuminc","combined"),
-             randFraction = null.p )
+             randFraction)
 {
   
   ## This function apply the stopping rules for nonefficacy and high efficacy monitoring.

@@ -1,5 +1,3 @@
-%% $Id: entropy_np.Rnw,v 1.43 2010/02/18 14:43:37 jracine Exp jracine $
-
 %\VignetteEngine{R.rsp::asis}
 %\VignetteIndexEntry{seqDesign's Report Template}
 %\VignettePackage{seqDesign}
