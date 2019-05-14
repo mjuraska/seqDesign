@@ -60,12 +60,12 @@ simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2),
                     stage1=78, randomSeed=300)
 
 monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
-                            harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
-                            minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, 
-                            nonEffInterval=20, lowerVEnoneff=0, upperVEnoneff=0.4, 
+                            harmMonitorRange=c(10,100), alphaPerTest=NULL, 
+                            nonEffStartMethod="FKG", nonEffInterval=20, 
+                            lowerVEnoneff=0, upperVEnoneff=0.4, 
                             highVE=0.7, stage1VE=0, lowerVEuncPower=0, 
                             alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
-                            alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26)
+                            alphaUncPower=0.05, estimand="cuminc", lagTime=26)
 
 censData <- censTrial(dataFile=simData, monitorFile=monitorData, stage1=78, stage2=156)
                        
@@ -84,11 +84,11 @@ rankData <- rankTrial(censFile=censData, idxHighestVE=2,
 ###
 ### monitorTrial(dataFile=
 ###          "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
-###          stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
-###          minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, nonEffInterval=20, 
+###          stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=NULL, 
+###          nonEffStartMethod="FKG", nonEffInterval=20, 
 ###          lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, stage1VE=0, 
 ###          lowerVEuncPower=0, alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
-###          alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26, saveDir="./")
+###          alphaUncPower=0.05, estimand="cuminc", lagTime=26, saveDir="./")
 ###
 ### censTrial(dataFile=
 ###  "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData",

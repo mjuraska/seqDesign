@@ -1,6 +1,6 @@
 Package: seqDesign
 Version: 1.2
-Date: 2019-05-03
+Date: 2019-05-14
 Title: Simulation and Group Sequential Monitoring of Randomized Two-Stage Treatment Efficacy Trials with Time-to-Event Endpoints
 Authors@R: c(person("Michal", "Juraska", email = "mjuraska@fredhutch.org", role = c("aut", "cre")), person("Doug", "Grove", email = "dgrove@scharp.org", role = "aut"), person("Xuesong", "Yu", email = "xyu@scharp.org", role = "ctb"), person("Peter", "Gilbert", email = "pgilbert@scharp.org", role = "ctb"), person("Stephanie", "Wu", email = "swu18@uw.edu", role = "ctb"))
 URL: https://github.com/mjuraska/seqDesign

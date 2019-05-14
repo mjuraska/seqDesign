@@ -16,6 +16,8 @@ censTrial(dataFile, monitorFile, stage1, stage2, saveFile = NULL,
 
 \item{stage2}{the final week of stage 2 in a two-stage trial, i.e., the maximum follow-up time}
 
+\item{saveFile}{a character string specifying the name of the output \code{.RData} file. If \code{NULL} (default), a default file name will be used.}
+
 \item{saveDir}{a character string specifying a path for both \code{dataFile} and \code{monitorFile}. If supplied, the output is also saved as an \code{.RData} file in this directory; otherwise the output is returned as a list.}
 
 \item{verbose}{a logical value indicating whether information on the output directory and file name should be printed out (default is \code{TRUE})}
@@ -49,12 +51,12 @@ simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2),
                     stage1=78, randomSeed=300)
 
 monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
-                            harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
-                            minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, 
-                            nonEffInterval=20, lowerVEnoneff=0, upperVEnoneff=0.4, 
-                            highVE=0.7, stage1VE=0, lowerVEuncPower=0, 
-                            alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
-                            alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26)
+                            harmMonitorRange=c(10,100), alphaPerTest=NULL, 
+                            nonEffStartMethod="FKG", nonEffInterval=20, 
+                            lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, 
+                            stage1VE=0, lowerVEuncPower=0, alphaNoneff=0.05, 
+                            alphaHigh=0.05, alphaStage1=0.05, 
+                            alphaUncPower=0.05, estimand="cuminc", lagTime=26)
 
 censData <- censTrial(dataFile=simData, monitorFile=monitorData, stage1=78, stage2=156)
 
@@ -68,12 +70,12 @@ censData <- censTrial(dataFile=simData, monitorFile=monitorData, stage1=78, stag
 ###          stage1=78, saveDir="./", randomSeed=300)
 ###
 ### monitorTrial(dataFile=
-###          "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
-###          stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
-###          minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, nonEffInterval=20, 
-###          lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, stage1VE=0, 
-###          lowerVEuncPower=0, alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
-###          alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26, saveDir="./")
+###              "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
+###              stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=NULL, 
+###              nonEffStartMethod="FKG", nonEffInterval=20, lowerVEnoneff=0, 
+###              upperVEnoneff=0.4, highVE=0.7, stage1VE=0, lowerVEuncPower=0, 
+###              alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, alphaUncPower=0.05, 
+###              estimand="cuminc", lagTime=26, saveDir="./")
 ###
 ### censTrial(dataFile=
 ###          "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData",

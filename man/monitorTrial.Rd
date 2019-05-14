@@ -9,11 +9,10 @@ monitorTrial(dataFile, stage1, stage2, harmMonitorRange,
   nonEffStartMethod = c("FKG", "fixed", "?", "old"),
   nonEffStartParams = NULL, nonEffInterval,
   nonEffIntervalUnit = c("counts", "time"), lowerVEnoneff = NULL,
-  upperVEnoneff, highVE, stage1VE, lowerVEuncPower = NULL,
-  altVE = NULL, alphaNoneff, alphaHigh, alphaStage1,
-  alphaUncPower = NULL, alphaAltVE, estimand = c("combined", "cox",
-  "cuminc"), laggedMonitoring = FALSE, lagTime, post6moMonitor = FALSE,
-  VEcutoffWeek, saveFile = NULL, saveDir = NULL, verbose = TRUE)
+  upperVEnoneff, highVE, stage1VE, lowerVEuncPower = NULL, alphaNoneff,
+  alphaHigh, alphaStage1, alphaUncPower = NULL,
+  estimand = c("combined", "cox", "cuminc"), laggedMonitoring = FALSE,
+  lagTime, saveFile = NULL, saveDir = NULL, verbose = TRUE)
 }
 \arguments{
 \item{dataFile}{if \code{saveDir = NULL}, a list returned by \code{simTrial}; otherwise a name (character string) of an \code{.RData} file created by \code{simTrial}}
@@ -22,17 +21,25 @@ monitorTrial(dataFile, stage1, stage2, harmMonitorRange,
 
 \item{stage2}{the final week of stage 2 in a two-stage trial, i.e., the maximum follow-up time}
 
-\item{harmMonitorRange}{a 2-component numeric vector specifying the range for pooled numbers of infections (pooled over the placebo and vaccine arm accruing infections the fastest) for which potential-harm stopping boundaries will be computed}
+\item{harmMonitorRange}{a 2-component numeric vector specifying the range of the pooled number of infections (pooled over the placebo and vaccine arm accruing infections the fastest) over which the type I error rate, specified in \code{harmMonitorAlpha}, will be spent (per vaccine arm). Note that \code{harmMonitorRange} does not specify a range for which potential-harm stopping boundaries will be computed; instead, it specifies when potential-harm monitoring will start, and the range over which \code{harmMonitorAlpha} will be spent.}
 
-\item{alphaPerTest}{a per-test nominal/unadjusted alpha level for potential-harm monitoring. If \code{NULL}, a per-test alpha level is calculated that yields a cumulative alpha of 0.05 at the final potential-harm analysis.}
+\item{harmMonitorAlpha}{a numeric value (0.05 by default) specifying the overall type I error rate for potential-harm monitoring (per vaccine arm). To turn off potential-harm monitoring, set \code{harmMonitorAlpha} equal to 0.00001.}
 
-\item{nonEffInterval}{a number of infections between two adjacent non-efficacy interim analyses}
+\item{alphaPerTest}{a per-test nominal/unadjusted alpha level for potential-harm monitoring. If \code{NULL}, a per-test alpha level is calculated that yields a cumulative alpha of \code{harmMonitorAlpha} at the end of \code{harmMonitorRange}.}
 
-\item{lowerVEnoneff}{specifies criterion 1 for declaring non-efficacy: the lower bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{lowerVEnoneff} (typically set equal to 0)}
+\item{nonEffStartMethod}{a character string specifying the method used for determining when non-efficacy monitoring is to start. The default method of Freidlin, Korn, and Gray (2010) ("\code{FKG}") calculates the minimal pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) such that a hazard-ratio-based VE point estimate of 0\% would result in declaring non-efficacy, i.e., the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval for VE based on the asymptotic variance of the log-rank statistic is (barely) below the non-efficacy threshold specified as component \code{upperVEnonEff} in the list \code{nonEffStartParams}. If this list component is left unspecified, the argument \code{upperVEnonEff} is used as the non-efficacy threshold. The alternative method ("\code{fixed}") starts non-efficacy monitoring at a fixed pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) specified by component \code{N1} in the list \code{nonEffStartParams}.}
+
+\item{nonEffStartParams}{a list with named components specifying parameters required by \code{nonEffStartMethod} (\code{NULL} by default)}
+
+\item{nonEffInterval}{a numeric value (a number of infections or a number of weeks) specifying the interval between two adjacent non-efficacy interim analyses}
+
+\item{nonEffIntervalUnit}{a character string specifying whether intervals between two adjacent non-efficacy interim analyses should be event-driven (default option "\code{counts}") or calendar time-driven (option "\code{time}")}
+
+\item{lowerVEnoneff}{specifies criterion 1 for declaring non-efficacy: the lower bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{lowerVEnoneff} (typically set equal to 0). If \code{NULL} (default), this criterion is ignored.}
 
 \item{upperVEnoneff}{specifies criterion 2 for declaring non-efficacy: the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{upperVEnoneff} (typically a number in the 0--0.5 range)}
 
-\item{highVE}{specifies a criterion for declaring high-efficacy: the lower bound of the two-sided (1-\code{alphaHigh}) x 100\% confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range)}
+\item{highVE}{specifies a criterion for declaring high-efficacy: the lower bound of the two-sided (1-\code{alphaHigh}) x 100\% confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range). To turn off high efficacy monitoring, set \code{highVE} equal to 1.}
 
 \item{stage1VE}{specifies a criterion for advancement of a treatment's evaluation into Stage 2: the lower bound of the two-sided (1-\code{alphaStage1}) x 100\% confidence interval for the VE estimand lies above \code{stage1VE} (typically set equal to 0)}
 
@@ -48,26 +55,18 @@ monitorTrial(dataFile, stage1, stage2, harmMonitorRange,
 
 \item{estimand}{a character string specifying the choice of VE estimand(s) used in non- and high efficacy monitoring, advancement rule for Stage 2, and unconditional power calculations. Three options are implemented: (1) the `pure' Cox approach (\code{"cox"}), where VE is defined as 1-hazard ratio (treatment/control) and estimated by the maximum partial likelihood estimator in the Cox model; (2) the `pure' cumulative incidence-based approach (\code{"cuminc"}), where VE is defined as 1-cumulative incidence ratio (treatment/control) and estimated by the transformation of the Nelson-Aalen estimator for the cumulative hazard function; and (3) the combined approach (\code{"combined"}), where both aforementioned VE estimands are used for non-efficacy monitoring while the cumulative VE estimand is used for all other purposes. Only the first three characters are necessary.}
 
-\item{post6moMonitor}{a logical value indicating whether, additionally, post-6 months non-efficacy monitoring shoud be used as a more conservative non-efficacy monitoring approach. If \code{TRUE} and \code{estimand = "combined"}, the cumulative VE estimand is considered only for non-efficacy monitoring.}
+\item{laggedMonitoring}{a logical value (\code{FALSE} by default) indicating whether "per-protocol" non-efficacy monitoring should additionally be conducted for events occurring after \code{lagTime} weeks as a more conservative non-efficacy monitoring approach. If \code{TRUE} and \code{estimand = "combined"}, the cumulative VE estimand is considered only for non-efficacy monitoring.}
 
-\item{VEcutoffWeek}{a time point (in weeks) defining the per-protocol VE estimand, i.e., VE(\code{VEcutoffWeek}--\code{stage1}). This VE estimand is also used in post-6 months non-efficacy monitoring. It is typically chosen as the date of the last immunization or the date of the visit following the last immunization.}
+\item{lagTime}{a time point (in weeks) defining the per-protocol VE estimand, i.e., VE(\code{lagTime}--\code{stage1}). This VE estimand is also used in "per-protocol" non-efficacy monitoring if \code{laggedMonitoring} equals \code{TRUE}. It is typically chosen as the date of the last immunization or the date of the visit following the last immunization.}
+
+\item{saveFile}{a character string specifying the name of the output \code{.RData} file. If \code{NULL} (default), a default file name will be used.}
 
 \item{saveDir}{a character string specifying a path for \code{dataFile}. If supplied, the output is also saved as an \code{.RData} file in this directory; otherwise the output is returned as a list.}
 
 \item{verbose}{a logical value indicating whether information on the output directory, file name, and monitoring outcomes should be printed out (default is \code{TRUE})}
-
-\item{minCnt}{a minumum number of infections (pooled over the placebo and vaccine arm accruing infections the fastest) required for the initiation of non-efficacy monitoring [criterion 1]}
-
-\item{minPct}{a minimum proportion of infections after \code{week1} (pooled over the placebo and vaccine arm accruing infections the fastest) required for the initiation of non-efficacy monitoring [criterion 2]}
-
-\item{week1}{a time point (in weeks) used, together with \code{minPct}, for defining criterion 2}
-
-\item{minCnt2}{a minumum number of infections after \code{week2} (pooled over the placebo and vaccine arm accruing infections the fastest) required for the initiation of non-efficacy monitoring [criterion 3]}
-
-\item{week2}{a time point (in weeks) used, together with \code{minCnt2}, for defining criterion 3}
 }
 \value{
-If \code{saveDir} is specified, the output list (named \code{out}) is saved as an \code{.RData} file in \code{saveDir} (the path to \code{saveDir} is printed); otherwise it is returned. The output object is a list of length equal to the number of simulated trials, each of which is a list of length equal to the number of treatment arms, each of which is a list with (at least) the following components:
+If \code{saveDir} (and, optionally \code{saveFile}) is specified, the output list (named \code{out}) is saved as an \code{.RData} file in \code{saveDir} (the path to \code{saveDir} is printed); otherwise it is returned. The output object is a list of length equal to the number of simulated trials, each of which is a list of length equal to the number of treatment arms, each of which is a list with (at least) the following components:
 \itemize{
   \item \code{boundHit}: a character string stating the monitoring outcome in this treatment arm, i.e., one of \code{"Harm"}, \code{"NonEffInterim"}, \code{"NonEffFinal"}, \code{"Eff"}, or \code{"HighEff"}. The first four outcomes can occur in Stage 1, whereas the last outcome can combine data over Stage 1 and Stage 2.
   \item \code{stopTime}: the time of hitting a stopping boundary since the first subject enrolled in the trial
@@ -86,11 +85,11 @@ If \code{saveDir} is specified, the output list (named \code{out}) is saved as a
 \details{
 All time variables use week as the unit of time. Month is defined as 52/12 weeks.
 
-Potential harm monitoring starts at the \code{harmMonitorRange[1]}-th infection pooled over the placebo group and the vaccine regimen that accrues infections the fastest. The potential harm analyses continue at each additional infection until the first interim analysis for non-efficacy. The monitoring is implemented with exact one-sided binomial tests of H0: \eqn{p \le p0} versus H1: \eqn{p > p0}, where \eqn{p} is the probability that an infected participant was assigned to the vaccine group, and \eqn{p0} is a fixed constant that represents the null hypothesis that an infection is equally likely to be assigned vaccine or placebo. Each test is performed at the same prespecified nominal/unadjusted alpha-level (\code{alphaPerTest}), chosen based on simulations such that, for each vaccine regimen, the overall type I error rate by the \code{harmMonitorRange[2]}-th arm-pooled infection (i.e., the probability that the potential harm boundary is reached when the vaccine is actually safe, \eqn{p = p0}) equals 0.05.
+Potential harm monitoring starts at the \code{harmMonitorRange[1]}-th infection pooled over the placebo group and the vaccine regimen that accrues infections the fastest. The potential harm analyses continue at each additional infection until the first interim analysis for non-efficacy. The monitoring is implemented with exact one-sided binomial tests of H0: \eqn{p \le p0} versus H1: \eqn{p > p0}, where \eqn{p} is the probability that an infected participant was assigned to the vaccine group, and \eqn{p0} is a fixed constant that represents the null hypothesis that an infection is equally likely to be assigned vaccine or placebo. Each test is performed at the same prespecified nominal/unadjusted alpha-level (\code{alphaPerTest}), chosen based on simulations such that, for each vaccine regimen, the overall type I error rate by the \code{harmMonitorRange[2]}-th arm-pooled infection (i.e., the probability that the potential harm boundary is reached when the vaccine is actually safe, \eqn{p = p0}) equals \code{harmMonitorAlpha}.
 
-Non-efficacy is defined as evidence that it is highly unlikely that the vaccine has a beneficial effect measured as VE(0--\code{stage1}) of \code{upperVEnoneff} x 100\% or more. The non-efficacy analyses for each vaccine regimen will start at the first infection at or after the \code{minCnt}-th (pooled over the vaccine and placebo arm) when at least \code{minPct} x 100\% of the accumulated infections are diagnosed after \code{week1} and at least \code{minCnt2} infections are diagnosed after \code{week2}. Stopping for non-efficacy will lead to a reported two-sided (1-\code{alphaNoneff}) x 100\% CI for VE(0--\code{stage1}) with the lower confidence bound below \code{lowerVEnoneff} and the upper confidence bound below \code{upperVEnoneff}, where \code{estimand} determines the choice of the VE(0--\code{stage1}) estimand. This approach is similar to the inefficacy monitoring approach of Freidlin B, Korn EL, Gray R. (2010) A general inefficacy interim monitoring rule for randomized trials. Clinical Trials, 7:197-208. If \code{estimand = "combined"}, stopping for non-efficacy will lead to reported (1-\code{alphaNoneff}) x 100\% CIs for both VE parameters with lower confidence bounds below \code{lowerVEnoneff} and upper confidence bounds below \code{upperVEnoneff}. If \code{post6moMonitor = TRUE}, stopping for non-efficacy will lead to reported (1-\code{alphaNoneff}) x 100\% CIs for both VE(0--\code{stage1}) and VE(\code{VEcutoffWeek}--\code{stage1}) with lower confidence bounds below \code{lowerVEnoneff} and upper confidence bounds below \code{upperVEnoneff}.
+Non-efficacy is defined as evidence that it is highly unlikely that the vaccine has a beneficial effect measured as VE(0--\code{stage1}) of \code{upperVEnoneff} x 100\% or more. The non-efficacy analyses for each vaccine regimen will start at the first infection (pooled over the vaccine and placebo arm) determined by \code{nonEffStartMethod}. Stopping for non-efficacy will lead to a reported two-sided (1-\code{alphaNoneff}) x 100\% CI for VE(0--\code{stage1}) with, optionally, the lower confidence bound below \code{lowerVEnoneff} and the upper confidence bound below \code{upperVEnoneff}, where \code{estimand} determines the choice of the VE(0--\code{stage1}) estimand. This approach is similar to the inefficacy monitoring approach of Freidlin, Korn, and Gray (2010). If \code{estimand = "combined"}, stopping for non-efficacy will lead to reported (1-\code{alphaNoneff}) x 100\% CIs for both VE parameters with, optionally, lower confidence bounds below \code{lowerVEnoneff} and upper confidence bounds below \code{upperVEnoneff}. If \code{laggedMonitoring = TRUE}, stopping for non-efficacy will lead to reported (1-\code{alphaNoneff}) x 100\% CIs for both VE(0--\code{stage1}) and VE(\code{lagTime}--\code{stage1}) with, optionally, lower confidence bounds below \code{lowerVEnoneff} and upper confidence bounds below \code{upperVEnoneff}.
 
-High efficacy monitoring allows early detection of a highly protective vaccine if there is evidence that VE(0--\code{stage2}) \eqn{>} \code{highVE} x 100\%, based on two planned interim analyses, the first at the time of the fifth planned non-efficacy analysis, and the second at the expected mid-point between the number of infections at the first interim analysis and the number of infections observed at the end of \code{stage2}. While monitoring for potential harm and non-efficacy restricts to \code{stage1} infections, monitoring for high efficacy counts all infections during \code{stage1} or \code{stage2}, given that early stopping for high efficacy would only be warranted under evidence for durability of the efficacy.
+High efficacy monitoring allows early detection of a highly protective vaccine if there is evidence that VE(0--\code{stage2}) \eqn{>} \code{highVE} x 100\%. It is synchronized with non-efficacy monitoring during Stage 1, and a single high-efficacy interim analysis during Stage 2 is conducted halfway between the end of Stage 1 and the end of the trial. While monitoring for potential harm and non-efficacy restricts to \code{stage1} infections, monitoring for high efficacy counts all infections during \code{stage1} or \code{stage2}, given that early stopping for high efficacy would only be warranted under evidence for durability of the efficacy.
 
 The following principles and rules are applied in the monitoring procedure:
 \itemize{
@@ -122,12 +121,12 @@ simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2),
                     stage1=78, randomSeed=300)
    
 monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
-                            harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
-                            minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, 
-                            nonEffInterval=20, lowerVEnoneff=0, upperVEnoneff=0.4, 
-                            highVE=0.7, stage1VE=0, lowerVEuncPower=0, alphaNoneff=0.05,
+                            harmMonitorRange=c(10,100), alphaPerTest=NULL, 
+                            nonEffStartMethod="FKG", nonEffInterval=20, 
+                            lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, 
+                            stage1VE=0, lowerVEuncPower=0, alphaNoneff=0.05,
                             alphaHigh=0.05, alphaStage1=0.05, alphaUncPower=0.05,
-                            estimand="cuminc", VEcutoffWeek=26)
+                            estimand="cuminc", lagTime=26)
    
 ### alternatively, to save the .RData output file (no '<-' needed):
 ###
@@ -140,12 +139,15 @@ monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
 ###
 ### monitorTrial(dataFile=
 ###              "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
-###              stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=0.0106, 
-###              minCnt=50, minPct=0.33, week1=26, minCnt2=2, week2=52, nonEffInterval=20, 
-###              lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, stage1VE=0, 
-###              lowerVEuncPower=0, alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, 
-###              alphaUncPower=0.05, estimand="cuminc", VEcutoffWeek=26, saveDir="./")
+###              stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=NULL, 
+###              nonEffStartMethod="FKG", nonEffInterval=20, lowerVEnoneff=0, 
+###              upperVEnoneff=0.4, highVE=0.7, stage1VE=0, lowerVEuncPower=0, 
+###              alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, alphaUncPower=0.05, 
+###              estimand="cuminc", lagTime=26, saveDir="./")
 
+}
+\references{
+Freidlin B., Korn E. L., and Gray R. (2010), A general inefficacy interim monitoring rule for randomized clinical trials. \emph{Clinical Trials} 7(3):197-208.
 }
 \seealso{
 \code{\link{simTrial}}, \code{\link{censTrial}}, and \code{\link{rankTrial}}

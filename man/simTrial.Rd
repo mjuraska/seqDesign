@@ -43,6 +43,8 @@ simTrial(N, aveVE, VEmodel = c("half", "constant"), vePeriods,
 
 \item{stage1}{the final week of stage 1 in a two-stage trial}
 
+\item{saveFile}{a character string specifying the name of the output \code{.RData} file. If \code{NULL} (default), a default file name will be used.}
+
 \item{saveDir}{a character string specifying a path for the output directory. If supplied, the output is saved as an \code{.RData} file in the directory; otherwise the output is returned as a list.}
 
 \item{verbose}{a logical value indicating whether information on the output directory and file name should be printed out (default is \code{TRUE})}
@@ -105,7 +107,7 @@ simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2),
 ###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
 ###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
 ###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
-###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
 ###          blockSize=30, stage1=78, saveDir="./", randomSeed=300)
 
 }
