@@ -7,7 +7,9 @@ NULL
 
 globalVariables(c("trialObj","futime","event","exit","trt","totInfec","entry","N",
                   "trialListCensor","out","n","Nvacc","approxOk","V","P","pwList",
-                  "N.vax.arms"))
+                  "N.vax.arms", "FR", "FR_loCI", "FR_upCI", "HR", "HR_loCI", "HR_upCI",
+                  "VE","VE_loCI","VE_upCI", "evalTime", "nEvents", "nEvents.1", 
+                  "nEvents.2", "null.p", "varlogFR"))
 
 ## Create a auxillary function "is.TRUE" to use for logical comparisons
 ## is.TRUE(x) returns TRUE for each element of 'x' that is TRUE, and
