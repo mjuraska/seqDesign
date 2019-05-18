@@ -1,3 +1,7 @@
+%\VignetteIndexEntry{Instructions for Using seqDesign and Generating the Output PDF Report}
+%\VignetteEngine{knitr::knitr}
+%\VignetteEncoding{UTF-8}
+
 \documentclass[11pt]{article}
 
 \usepackage{amsmath, amsthm, amssymb}
@@ -16,10 +20,6 @@
 \setlength{\topmargin}{0.21truein}
 \hoffset-18mm
 \usepackage{parskip}
-
-%\VignetteIndexEntry{Instructions for Using seqDesign and Generating the Output PDF Report}
-%\VignetteEngine{knitr::knitr}
-%\VignetteEncoding{UTF-8}
 
 \begin{document}
 \pagestyle{empty}
@@ -89,6 +89,11 @@ VEpowerPP(dataList=
           saveDir=outDir)
 @
 
-\textbf{Step 3.} Look up the vignette titled "seqDesign's Report Template" by, e.g., calling \newline\verb+browseVignettes(package="seqDesign")+. The vignette's source contains .Rnw template code for generating the report, and the vignette's PDF is the compiled template code (note that it is a static PDF because the .Rnw source requires seqDesign's .RData output files to be compiled and those are not part of the package, the user generates them in Step~2). Update the user-specified constants in the first R chunk and compile the PDF report. Note that other changes in table/figure captions, legends and labels might be needed to reflect the specified trial design.
+\textbf{Step 3.} Look up the vignette titled ``seqDesign's Report Template" by, e.g., calling
+<<eval=FALSE, echo=TRUE, tidy=FALSE>>=
+browseVignettes(package="seqDesign")
+@
+
+The vignette's source contains .Rnw template code for generating the report, and the vignette's PDF is the compiled template code (note that it is a static PDF because the .Rnw source requires seqDesign's .RData output files to be compiled and those are not part of the package, the user generates them in Step~2). Update the user-specified constants in the first R chunk and compile the PDF report. Note that other changes in table/figure captions, legends and labels might be needed to reflect the specified trial design.
 
 \end{document}
