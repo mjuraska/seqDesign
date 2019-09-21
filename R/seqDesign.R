@@ -1616,8 +1616,8 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
 #' @param enrollPeriod the final week of the enrollment period
 #' @param enrollPartial the final week of the portion of the enrollment period with a reduced enrollment rate defined by \code{enrollPartialRelRate}
 #' @param enrollPartialRelRate a non-negative value characterizing the fraction of the weekly enrollment rate governing enrollment from week 1 until week \code{enrollPartial}
-#' @param dropoutRate a (prior) annual dropout rate
-#' @param infecRate a (prior) annual infection rate in the control arm
+#' @param dropoutRate a (prior) dropout probability within 1 year
+#' @param infecRate a (prior) infection probability within 1 year in the control arm
 #' @param fuTime a follow-up time (in weeks) of each participant
 #' @param visitSchedule a numeric vector listing the visit weeks at which testing for the endpoint is conducted
 #' @param missVaccProb a numeric vector with conditional probabilities of having missed a vaccination given the follow-up time exceeds \code{VEcutoffWeek} weeks. For each component, a separate per-protocol indicator is generated. Each per-protocol cohort includes subjects with (i) a non-missing vaccination, and (ii) follow-up time exceeding \code{VEcutoffWeek} weeks. If \code{NULL}, no per-protocol indicators are included.
@@ -1975,7 +1975,7 @@ trialObj <- list( trialData = trialList,
             paste0("simTrial_nPlac=", N[1], "_nVacc=", 
                    paste(N[-1], collapse="_"), "_aveVE=",
                    paste( round(aveVE,2), collapse="_"),
-                   "_infRate=", infecRate,".RData" )
+                   "_infRate=", format(infecRate, digits=3, nsmall=3),".RData" )
 
     save(trialObj, file=file.path(saveDir, saveFile))
 
@@ -3994,7 +3994,7 @@ monitorTrial <- function (dataFile,
                           ## 'laggedMonitoring' replaces argument 'post6moMonitor' and 
                           ## 'lagTime' replaces 'VEcutoffWeek'
                           laggedMonitoring=FALSE,
-                          lagTime,
+                          lagTime = NULL,
                   
                           saveFile= NULL,
                           saveDir = NULL,
