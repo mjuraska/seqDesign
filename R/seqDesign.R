@@ -1611,8 +1611,8 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
 #'
 #' @param N a numeric vector specifying the numbers of enrolled trial participants per treatment arm. The length of \code{N} equals the total number of treatment arms, and the first component of \code{N} represents the control arm.
 #' @param aveVE a numeric vector containing, for each treatment arm in \code{N}, a time-averaged vaccine efficacy (VE), defined as the weighted average of VEs in the time intervals specified by \code{vePeriods}. If \code{VEmodel = "half"}, VE is halved in the initial interval, the full VE is applied in the second interval, and \code{aveVE} is applied thereafter. The components of \code{N} and \code{aveVE} correspond to each other.
-#' @param VEmodel a character string specifying whether VE is assumed constant over time (option "\code{constant}") or halved in the initial time interval as defined in \code{vePeriods} (option "\code{half}"). Only the first character is necessary.
-#' @param vePeriods a numeric vector defining start times (in weeks) of time intervals with (potentially) distinct VE levels depending on the choice of the \code{VEmodel}
+#' @param VEmodel a character string specifying whether VE is assumed to be constant (option "\code{constant}") or have multiple levels (option "\code{half}") over time. The option "\code{half}" allows either a 2- or 3-level VE model (specified by the \code{vePeriods} vector with either 2 or 3 components). Either multi-level VE model assumes a maximal VE in the second time interval such that, when halved in the first interval, the weighted average of VE over the first two time intervals equals \code{aveVE}. Only the first character is necessary.
+#' @param vePeriods a numeric vector defining start times (in weeks) of time intervals with (potentially) distinct VE levels depending on the choice of the \code{VEmodel}. If \code{VEmodel} equals "\code{half}", then \code{vePeriods} must have length 2 or 3.
 #' @param enrollPeriod the final week of the enrollment period
 #' @param enrollPartial the final week of the portion of the enrollment period with a reduced enrollment rate defined by \code{enrollPartialRelRate}
 #' @param enrollPartialRelRate a non-negative value characterizing the fraction of the weekly enrollment rate governing enrollment from week 1 until week \code{enrollPartial}
@@ -1771,31 +1771,49 @@ enrollSchedule <- data.frame(
                       relativeRate = c( enrollPartialRelRate, 1) )
 
 if( VEmodel!="constant" ) {
-   ## 'vaccEff' is a vector of true *full* VEs for each treatment (defined as 
-   ##   a function of 'aveVE')
-   vaccEff <- aveVE * (vePeriods[3]-1)/((vePeriods[3]-1)-(vePeriods[2]-1)/2)
-
-   ## If any value in 'vaccEff' is larger than 1, compute the largest possible
-   ## average VE, return it as part of the error message, and stop.
-   if ( any(vaccEff >= 1) ){
-
-       ## which VE values are too large?
-       w.too.large <-which( vaccEff >= 1 )
-
-       ## compute maximum possible average VE such that 'vaccEff' is equal to 1
-       ## we need to use a value that is less than 'maxEq'
-       maxEq <- ((vePeriods[3]-1)-(vePeriods[2]-1)/2)/(vePeriods[3]-1)
-
-       useAsMax <- floor(1000 * maxEq)/1000
-       if (!(useAsMax < (maxEq - sqrt(.Machine$double.eps)))) {
-           useAsMax <- useAsMax - 0.001
-       }
-       stop("The following average vaccine efficacy(ies) is/are not attainable when",
-            " using the \n", "halved VE model: ", aveVE[w.too.large], "\n", 
-            "The maximum attainable VE is (approximately) ", useAsMax, "\n")
-   }
+  # if the VE model is different from constant, then it is assumed to be defined by either 2 or 3 time intervals specified by 'vePeriods'
+  # more than 3 time intervals are currently not supported
+  if (length(vePeriods)==3){
+    # this VE model assumes a VE level (variable 'vaccEff') in the second interval such that, when halved in the first interval,
+    # the weighted average VE over the first two intervals equals 'aveVE';
+    # VE in the third (last) interval is assumed to be 'aveVE'
+    
+    ## 'vaccEff' is a vector of true *full* VEs for each treatment (defined as a function of 'aveVE'), assumed in the second time interval
+    # in this formula, it is also assumed that vePeriods[1]=1
+    vaccEff <- aveVE * (vePeriods[3]-1)/((vePeriods[3]-1)-(vePeriods[2]-1)/2)
+    
+    ## If any value in 'vaccEff' is larger than 1, compute the largest possible
+    ## average VE, return it as part of the error message, and stop.
+    if ( any(vaccEff >= 1) ){
+      
+      ## which VE values are too large?
+      w.too.large <-which( vaccEff >= 1 )
+      
+      ## compute maximum possible average VE such that 'vaccEff' is equal to 1
+      ## we need to use a value that is less than 'maxEq'
+      maxEq <- ((vePeriods[3]-1)-(vePeriods[2]-1)/2)/(vePeriods[3]-1)
+      
+      useAsMax <- floor(1000 * maxEq)/1000
+      if (!(useAsMax < (maxEq - sqrt(.Machine$double.eps)))){
+        useAsMax <- useAsMax - 0.001
+      }
+      stop("The following average vaccine efficacy(ies) is/are not attainable when",
+           " using the \n", "halved VE model: ", aveVE[w.too.large], "\n", 
+           "The maximum attainable VE is (approximately) ", useAsMax, "\n")
+    } 
+  } else if (length(vePeriods)==2){
+    # this VE model assumes a VE level (variable 'vaccEff') in the second (last) interval such that, when halved in the first interval,
+    # the weighted average VE over the first two intervals equals 'aveVE'
+    # implication: the maximal VE must be greater in absolute value than 'aveVE' so that the average VE equals to 'aveVE'
+    
+    # the same formula as for the 3-level VE model except 'vePeriods[3]' is replacated with 'fuTime + 1'
+    vaccEff <- aveVE * fuTime / (fuTime - (vePeriods[2] - 1) / 2)
+  } else if (length(vePeriods)>3){
+    stop("The argument 'vePeriods' must have length either 2 or 3 for this type of VE model.")
+  }
+  
 } else {
-   vaccEff <- aveVE
+  vaccEff <- aveVE
 }
 
 ## - 'VEs' are true vaccine efficacies used for data generation
@@ -1806,7 +1824,11 @@ VEs <- vector("list", nVaccArms)
 
 for (ii in 1:nVaccArms) {
   if (VEmodel=="half"){
-    VEs[[ii]] = c(vaccEff[ii]/2, vaccEff[ii], aveVE[ii])    
+    if (length(vePeriods)==3){
+      VEs[[ii]] = c(vaccEff[ii]/2, vaccEff[ii], aveVE[ii])      
+    } else if (length(vePeriods)==2){
+      VEs[[ii]] = c(vaccEff[ii]/2, vaccEff[ii])
+    }
   }
   if (VEmodel=="constant"){
     VEs[[ii]] = aveVE[ii]
@@ -3761,10 +3783,10 @@ censorTrial <- function(d, times, arms=NULL, timeScale=c("calendar","follow-up")
 #' @param harmMonitorRange a 2-component numeric vector specifying the range of the pooled number of infections (pooled over the placebo and vaccine arm accruing infections the fastest) over which the type I error rate, specified in \code{harmMonitorAlpha}, will be spent (per vaccine arm). Note that \code{harmMonitorRange} does not specify a range for which potential-harm stopping boundaries will be computed; instead, it specifies when potential-harm monitoring will start, and the range over which \code{harmMonitorAlpha} will be spent.
 #' @param harmMonitorAlpha a numeric value (0.05 by default) specifying the overall type I error rate for potential-harm monitoring (per vaccine arm). To turn off potential-harm monitoring, set \code{harmMonitorAlpha} equal to 0.00001.
 #' @param alphaPerTest a per-test nominal/unadjusted alpha level for potential-harm monitoring. If \code{NULL}, a per-test alpha level is calculated that yields a cumulative alpha of \code{harmMonitorAlpha} at the end of \code{harmMonitorRange}.
-#' @param nonEffStartMethod a character string specifying the method used for determining when non-efficacy monitoring is to start. The default method of Freidlin, Korn, and Gray (2010) ("\code{FKG}") calculates the minimal pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) such that a hazard-ratio-based VE point estimate of 0\% would result in declaring non-efficacy, i.e., the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval for VE based on the asymptotic variance of the log-rank statistic is (barely) below the non-efficacy threshold specified as component \code{upperVEnonEff} in the list \code{nonEffStartParams}. If this list component is left unspecified, the argument \code{upperVEnonEff} is used as the non-efficacy threshold. The alternative method ("\code{fixed}") starts non-efficacy monitoring at a fixed pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) specified by component \code{N1} in the list \code{nonEffStartParams}.
+#' @param nonEffStartMethod a character string specifying the method used for determining when non-efficacy monitoring is to start. The default method of Freidlin, Korn, and Gray (2010) ("\code{FKG}") calculates the minimal pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) such that a hazard-ratio-based VE point estimate of 0\% would result in declaring non-efficacy, i.e., the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval for VE based on the asymptotic variance of the log-rank statistic equals the non-efficacy threshold specified as component \code{upperVEnonEff} in the list \code{nonEffStartParams}. If this list component is left unspecified, the argument \code{upperVEnonEff} is used as the non-efficacy threshold. The alternative method ("\code{fixed}") starts non-efficacy monitoring at a fixed pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) specified by component \code{N1} in the list \code{nonEffStartParams}.
 #' @param nonEffStartParams a list with named components specifying parameters required by \code{nonEffStartMethod} (\code{NULL} by default)
-#' @param nonEffInterval a numeric value (a number of infections or a number of weeks) specifying the interval between two adjacent non-efficacy interim analyses
 #' @param nonEffIntervalUnit a character string specifying whether intervals between two adjacent non-efficacy interim analyses should be event-driven (default option "\code{counts}") or calendar time-driven (option "\code{time}")
+#' @param nonEffInterval a numeric vector (a number of infections or a number of weeks) specifying the timing of non-efficacy interim analyses. If a single numeric value is specified, then all interim looks are equidistant (in terms of the number of infections or weeks), and the value specifies the constant increment of information or time between two adjacent interim looks. If a numeric vector with at least two components is specified, then, following the initial interim look, the timing of subsequent interim looks is determined by (potentially differential) increments of information or time specified by this vector.
 #' @param lowerVEnoneff specifies criterion 1 for declaring non-efficacy: the lower bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{lowerVEnoneff} (typically set equal to 0). If \code{NULL} (default), this criterion is ignored.
 #' @param upperVEnoneff specifies criterion 2 for declaring non-efficacy: the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{upperVEnoneff} (typically a number in the 0--0.5 range)
 #' @param highVE specifies a criterion for declaring high-efficacy: the lower bound of the two-sided (1-\code{alphaHigh}) x 100\% confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range). To turn off high efficacy monitoring, set \code{highVE} equal to 1.
@@ -3973,8 +3995,8 @@ monitorTrial <- function (dataFile,
                           #minCnt2,
                           #week2,
                   
-                          nonEffInterval,
                           nonEffIntervalUnit=c("counts","time"),
+                          nonEffInterval,
                   
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
@@ -4402,11 +4424,17 @@ monitorTrial <- function (dataFile,
           ## Determine the times at which nonEff monitoring will occur
           if (nonEffIntervalUnit == "counts") {
 
-              ## makes sequence of counts at which analyses will be done
-              nonEffCnts <- seq(from = N1, to = nInfec, by = nonEffInterval)
+            ## makes sequence of counts at which analyses will be done
+            if (length(nonEffInterval)==1){
+              # then a constant increment in the endpoint count is assumed
+              nonEffCnts <- seq(from = N1, to = nInfec, by = nonEffInterval)  
+            } else {
+              # then 'nonEffInterval' is a vector of increments specifying endpoint counts for subsequent interim looks
+              nonEffCnts <- c(N1, N1 + nonEffInterval)
+            }
 
-              ## Convert counts into times.  
-              nonEffTimes <- getInfectionTimes(datI.j, cnts=nonEffCnts )
+            ## Convert counts into times.  
+            nonEffTimes <- getInfectionTimes(datI.j, cnts=nonEffCnts )
           } else {
               ## User specified a time-sequence for monitoring. Figure out when 
               ## the first time will be, and the time of the last infection too,
