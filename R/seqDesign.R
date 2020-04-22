@@ -3996,6 +3996,8 @@ monitorTrial <- function (dataFile,
                           #week2,
                   
                           nonEffIntervalUnit=c("counts","time"),
+                          
+                          # a single numeric value (for constant increments) or a numeric vector (for variable increments)
                           nonEffInterval,
                   
                           ## lowerVEnoneff is not required.  Specify only if you want this
@@ -4174,17 +4176,17 @@ monitorTrial <- function (dataFile,
 
   } else if ( nonEffStartMethod == "fixed" ) {
 
-     if (!is.null( nonEffStartParams$N1 ) ) {
-        N1 <- nonEffStartParams$N1
-
-        ## set upperbound of 'harmMonitorRange' to be 'N1'
-        harmMonitorRange <- c(harmMonitorRange[1], N1)    
-     } else {
-        stop("Argument 'nonEffStartMethod' was specified as 'fixed'. ",
-             "This method requires\n", "you to provide an argument named",
-             "'N1' via the list argument 'nonEffStartParams'\n.",
-             "e.g. nonEffStartParams <- list(N1=60).  Please fix.\n" )
-     }
+    if (!is.null( nonEffStartParams$N1 ) ) {
+      N1 <- nonEffStartParams$N1
+      
+      ## set upperbound of 'harmMonitorRange' to be 'N1'
+      harmMonitorRange <- c(harmMonitorRange[1], N1)    
+    } else {
+      stop("Argument 'nonEffStartMethod' was specified as 'fixed'. ",
+           "This method requires\n", "you to provide an argument named",
+           "'N1' via the list argument 'nonEffStartParams'\n.",
+           "e.g. nonEffStartParams <- list(N1=60).  Please fix.\n" )
+    }
   }
 
 
@@ -4429,8 +4431,8 @@ monitorTrial <- function (dataFile,
               # then a constant increment in the endpoint count is assumed
               nonEffCnts <- seq(from = N1, to = nInfec, by = nonEffInterval)  
             } else {
-              # then 'nonEffInterval' is a vector of increments specifying endpoint counts for subsequent interim looks
-              nonEffCnts <- c(N1, N1 + nonEffInterval)
+              # then 'nonEffInterval' is a vector of potentially variable increments specifying endpoint counts for subsequent interim looks following the initial look
+              nonEffCnts <- c(N1, N1 + cumsum(nonEffInterval))
             }
 
             ## Convert counts into times.  
@@ -4442,10 +4444,15 @@ monitorTrial <- function (dataFile,
               firstLastnonEffTimes <- 
                   getInfectionTimes(datI.j, cnts=c(N1, nInfec))
 
-              nonEffTimes <- 
+              if (length(nonEffInterval)==1){
+                nonEffTimes <- 
                   seq(from = firstLastnonEffTimes[1],
-                        to = firstLastnonEffTimes[2],
-                        by = nonEffInterval)
+                      to = firstLastnonEffTimes[2],
+                      by = nonEffInterval)
+              } else {
+                # then 'nonEffInterval' is a vector of potentially variable time increments
+                nonEffTimes <- c(firstLastnonEffTimes[1], firstLastnonEffTimes[1] + cumsum(nonEffInterval))
+              }
           }
 
           ## run non-eff 
