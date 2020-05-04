@@ -248,6 +248,10 @@ monitorTrial <- function (dataFile,
                           ## 'lagTime' replaces 'VEcutoffWeek'
                           laggedMonitoring=FALSE,
                           lagTime = NULL,
+
+                          ## New argument - should be a list with named components used to pass
+                          ## all control info needed for the implementation of efficacy monitoring
+                          effMonControl = NULL,
                   
                           saveFile= NULL,
                           saveDir = NULL,
@@ -287,9 +291,6 @@ monitorTrial <- function (dataFile,
   ##       One minus confidence level of 2-sided CI for unconditional power to
   ##       reject H0: VE <= (lowerVEuncPower * 100)% 
 
-  # for reverse compatibility
-  post6moMonitor <- laggedMonitoring
-  VEcutoffWeek <- lagTime
 
   estimand <- match.arg(estimand)
   nonEffIntervalUnit <- match.arg(nonEffIntervalUnit)
