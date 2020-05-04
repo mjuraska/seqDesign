@@ -660,8 +660,12 @@ monitorTrial <- function (dataFile,
               # then a constant increment in the endpoint count is assumed
               nonEffCnts <- seq(from = N1, to = nInfec, by = nonEffInterval)  
             } else {
-              # then 'nonEffInterval' is a vector of potentially variable increments specifying endpoint counts for subsequent interim looks following the initial look
-              nonEffCnts <- c(N1, N1 + cumsum(nonEffInterval))
+              # then 'nonEffInterval' is a vector of potentially variable increments
+              # specifying endpoint counts for subsequent interim looks following the
+              # initial look
+              #nonEffCnts <- c(N1, N1 + cumsum(nonEffInterval))
+              nonEffCnts <- cumsum(c(N1, nonEffInterval))
+
             }
 
             ## Convert counts into times.  
@@ -680,7 +684,11 @@ monitorTrial <- function (dataFile,
                       by = nonEffInterval)
               } else {
                 # then 'nonEffInterval' is a vector of potentially variable time increments
-                nonEffTimes <- c(firstLastnonEffTimes[1], firstLastnonEffTimes[1] + cumsum(nonEffInterval))
+                #nonEffTimes <- c(firstLastnonEffTimes[1], firstLastnonEffTimes[1] + cumsum(nonEffInterval))
+                nonEffTimes <- cumsum( c(firstLastnonEffTimes[1], nonEffInterval) )
+
+                ## truncate so that nonEffTimes don't go beyond the trial duration
+                nonEffTimes <- nonEffTimes[ nonEffTimes <= firstLastnonEffTimes[2] ]
               }
           }
 
