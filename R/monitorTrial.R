@@ -265,7 +265,12 @@ monitorTrial <- function (dataFile,
                           ## 'lagTime' replaces 'VEcutoffWeek'
                           laggedMonitoring=FALSE,
                           lagTime = NULL,
-                  
+
+                          ## Allows user to specify a lag time (in weeks) for efficacy analyses.
+                          ## This is used to perform efficacy analyses that only include 
+                          ## events that occur after a specified time (measured from enrollment).
+                          effLagTime = NULL,
+
                           saveFile= NULL,
                           saveDir = NULL,
                           verbose = TRUE ) {
@@ -653,6 +658,7 @@ monitorTrial <- function (dataFile,
                      lowerVE = altVE,
                      alphaLevel = alphaAltVE,
                      estimand = effEst,
+                     lagTime = effLagTime,
                      time = harmRes$stopTime,
                      randFraction = null.p )
 
@@ -770,6 +776,7 @@ monitorTrial <- function (dataFile,
                         lowerVE = altVE,
                         alphaLevel = alphaAltVE,
                         estimand = effEst,
+                        lagTime = effLagTime,
                         time = futRes$stopTime,
                         randFraction = null.p )
 
@@ -815,6 +822,7 @@ monitorTrial <- function (dataFile,
                          lowerVE = altVE, 
                          alphaLevel = alphaAltVE, 
                          estimand = effEst, 
+                         lagTime = effLagTime,
                          time = highEffRes$stopTime,
                          randFraction = null.p )
 
@@ -854,6 +862,7 @@ monitorTrial <- function (dataFile,
                  lowerVE = altVE,
                  alphaLevel = alphaStage1, 
                  estimand = effEst, 
+                 lagTime = effLagTime,
                  boundLabels=c("Eff", "NonEffFinal"),
                  randFraction = null.p )
 

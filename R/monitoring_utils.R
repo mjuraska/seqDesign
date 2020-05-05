@@ -495,6 +495,7 @@ finalStage1Test <- function(dat,
                        lowerVE,
                        alphaLevel, 
                        estimand=c("cox","cuminc","combined"),
+                       lagTime=NULL,
                        time=NULL, 
                        boundLabels=c("Eff", "NonEffFinal"),
                        randFraction = null.p )
@@ -518,6 +519,9 @@ finalStage1Test <- function(dat,
 ##                  (if applicable) 'stage1VE'.
 ##
 ##   estimand       which estimand(s) to use to estimate VE
+##
+##   lagTime        specifies the time, in weeks (since enrollemnt), that events must 
+##                  occur after in order to be included in the analysis.
 ##
 ##   time           (Only used if analysisType == "stopTime") 
 ##                  The calendar time at which to censor the stage1 data prior
@@ -568,6 +572,11 @@ finalStage1Test <- function(dat,
     cox  <- (estimand %in% c("cox",   "combined"))
     cir  <- (estimand %in% c("cuminc","combined"))
 
+    ## if lagTime has been specified, then left censor the data of follow-up time
+    if ( !is.null(lagTime) && lagTime > 0.01 ) {
+      dat <- censorTrial(censDatList, times=lagTime, timeScale="follow-up", type="left")
+    }
+
     if (analysisType=="stopTime") {
         if (is.null(time)) {
             stop("Argument 'time' must be specified when analysisType='stopTime'\n")
@@ -575,7 +584,6 @@ finalStage1Test <- function(dat,
         ## censor data to 'time'
         dat <- censorTrial(dat, times=time, timeScale="calendar")
     }
-
 
     if (cir) {
         cumIncOut <- cumIncRatio( dat, 
