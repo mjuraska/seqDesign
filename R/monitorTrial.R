@@ -12,6 +12,8 @@
 #' @param harmMonitorRange a 2-component numeric vector specifying the range of the pooled number of infections (pooled over the placebo and vaccine arm accruing infections the fastest) over which the type I error rate, specified in \code{harmMonitorAlpha}, will be spent (per vaccine arm). Note that \code{harmMonitorRange} does not specify a range for which potential-harm stopping boundaries will be computed; instead, it specifies when potential-harm monitoring will start, and the range over which \code{harmMonitorAlpha} will be spent.
 #' @param harmMonitorAlpha a numeric value (0.05 by default) specifying the overall type I error rate for potential-harm monitoring (per vaccine arm). To turn off potential-harm monitoring, set \code{harmMonitorAlpha} equal to 0.00001.
 #' @param alphaPerTest a per-test nominal/unadjusted alpha level for potential-harm monitoring. If \code{NULL}, a per-test alpha level is calculated that yields a cumulative alpha of \code{harmMonitorAlpha} at the end of \code{harmMonitorRange}.
+#' @param effEst a character string specifying the choice of VE estimand used in interim efficacy monitoring, final efficacy analysis, end-of-Stage-1 testing, and unconditional power calculations. Two options are implemented: (1) cumulative incidence-based VE (\code{"cuminc"}), the default option, defined as 1 minus the cumulative incidence ratio (treatment/control) and estimated by the transformation of the Nelson-Aalen estimator for the cumulative hazard function; and (2) hazard-based VE (\code{"cox"}), where VE is defined as 1 minus the hazard ratio (treatment/control) and estimated by the maximum partial likelihood estimator in the Cox model with treatment as a sole covariate.
+#' @param nonEffEst a character string specifying the choice of VE estimand(s) used in interim non- and high efficacy monitoring. Three options are implemented: (1) the combined approach (\code{"combined"}), the default option, which considers monitoring based on both \code{effEst} VE estimands and their respective estimators; (2) \code{"cuminc"}) as introduced for \code{effEst}; and (3) \code{"cox"} as introduced for \code{effEst}.
 #' @param nonEffStartMethod a character string specifying the method used for determining when non-efficacy monitoring is to start. The default method of Freidlin, Korn, and Gray (2010) ("\code{FKG}") calculates the minimal pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) such that a hazard-ratio-based VE point estimate of 0\% would result in declaring non-efficacy, i.e., the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval for VE based on the asymptotic variance of the log-rank statistic equals the non-efficacy threshold specified as component \code{upperVEnonEff} in the list \code{nonEffStartParams}. If this list component is left unspecified, the argument \code{upperVEnonEff} is used as the non-efficacy threshold. The alternative method ("\code{fixed}") starts non-efficacy monitoring at a fixed pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) specified by component \code{N1} in the list \code{nonEffStartParams}.
 #' @param nonEffStartParams a list with named components specifying parameters required by \code{nonEffStartMethod} (\code{NULL} by default)
 #' @param nonEffIntervalUnit a character string specifying whether intervals between two adjacent non-efficacy interim analyses should be event-driven (default option "\code{counts}") or calendar time-driven (option "\code{time}")
@@ -25,7 +27,6 @@
 #' @param alphaHigh one minus the nominal confidence level of the two-sided confidence interval used for high efficacy monitoring
 #' @param alphaStage1 one minus the nominal confidence level of the two-sided confidence interval used for determining whether a treatment's evaluation advances into Stage 2
 #' @param alphaUncPower one minus the nominal confidence level of the two-sided confidence interval used to test one-sided null hypotheses H0: VE(0-\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\% against alternative hypotheses H1: VE(0--\code{stage1}) \eqn{>} \code{lowerVEuncPower} x 100\%. The same nominal confidence level is applied for each component of \code{lowerVEuncPower}.
-#' @param estimand a character string specifying the choice of VE estimand(s) used in non- and high efficacy monitoring, advancement rule for Stage 2, and unconditional power calculations. Three options are implemented: (1) the `pure' Cox approach (\code{"cox"}), where VE is defined as 1-hazard ratio (treatment/control) and estimated by the maximum partial likelihood estimator in the Cox model; (2) the `pure' cumulative incidence-based approach (\code{"cuminc"}), where VE is defined as 1-cumulative incidence ratio (treatment/control) and estimated by the transformation of the Nelson-Aalen estimator for the cumulative hazard function; and (3) the combined approach (\code{"combined"}), where both aforementioned VE estimands are used for non-efficacy monitoring while the cumulative VE estimand is used for all other purposes. Only the first three characters are necessary.
 #' @param laggedMonitoring a logical value (\code{FALSE} by default) indicating whether "per-protocol" non-efficacy monitoring should additionally be conducted for events occurring after \code{lagTime} weeks as a more conservative non-efficacy monitoring approach. If \code{TRUE} and \code{estimand = "combined"}, the cumulative VE estimand is considered only for non-efficacy monitoring.
 #' @param lagTime a time point (in weeks) defining the per-protocol VE estimand, i.e., VE(\code{lagTime}--\code{stage1}). This VE estimand is also used in "per-protocol" non-efficacy monitoring if \code{laggedMonitoring} equals \code{TRUE}. It is typically chosen as the date of the last immunization or the date of the visit following the last immunization.
 #' @param saveFile a character string specifying the name of the output \code{.RData} file. If \code{NULL} (default), a default file name will be used.
@@ -153,7 +154,25 @@ monitorTrial <- function (dataFile,
                           ## this argument, in which case argument 'harmMonitorAlpha' need not
                           ## be specified
                           alphaPerTest=NULL,
-                  
+                          
+                          ## Argument 'estimand' is deprecated, it is being replaced by two new 
+                          ## arguments for clarity/accuracy: 'nonEffEst' and 'effEst' 
+                          ##   'nonEffEst' specifies the estimand(s) to use for non-efficacy 
+                          ##      monitoring.  It takes the same values as 'estimand' did. 
+                          ##   'effEstf' specifies the estimand to use for efficacy analyses
+                          ##      only a single estimand can be chosen
+                          estimand=c("combined", "cox", "cuminc"),
+                          
+                          ##  Specifies the estimand used for efficacy analyses, both interim and final
+                          ## 
+                          ##  If not user-specified, it will take a value based on argument 'estimand'
+                          ##  if that has been specified, and if 'estimand' isn't specified, it defaults
+                          ##  to "cuminc". 
+                          effEst = c("cuminc","cox"),
+                          
+                          ## specifies the estimand(s) to use for non-efficacy monitoring
+                          nonEffEst = c("combined","cuminc","cox"),
+                          
                           ## character vector of methods to use to determine when to start non-efficacy
                           ## monitoring.  Each method requires different input information, and that
                           ## information should be input via the 'nonEffStartParams' argument - which
@@ -229,9 +248,6 @@ monitorTrial <- function (dataFile,
                           # a single numeric value (for constant increments) or a numeric vector (for variable increments)
                           nonEffInterval,
 
-                          ## specifies the estimand(s) to use for non-efficacy monitoring
-                          nonEffEst = c("combined","cuminc","cox"),
-                  
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
                           lowerVEnoneff=NULL,
@@ -245,21 +261,6 @@ monitorTrial <- function (dataFile,
                           alphaStage1,
                           alphaUncPower=NULL,
                           
-                          ## Argument 'estimand' is deprecated, it is being replaced by two new 
-                          ## arguments for clarity/accuracy: 'nonEffEst' and 'effEst' 
-                          ##   'nonEffEst' specifies the estimand(s) to use for non-efficacy 
-                          ##      monitoring.  It takes the same values as 'estimand' did. 
-                          ##   'effEstf' specifies the estimand to use for efficacy analyses
-                          ##      only a single estimand can be chosen
-                          estimand=c("combined", "cox", "cuminc"),
-
-                          ##  Specifies the estimand used for efficacy analyses, both interim and final
-                          ## 
-                          ##  If not user-specified, it will take a value based on argument 'estimand'
-                          ##  if that has been specified, and if 'estimand' isn't specified, it defaults
-                          ##  to "cuminc". 
-                          effEst = c("cuminc","cox"),
-                  
                           ## 'laggedMonitoring' replaces argument 'post6moMonitor' and 
                           ## 'lagTime' replaces 'VEcutoffWeek'
                           laggedMonitoring=FALSE,
