@@ -228,6 +228,9 @@ monitorTrial <- function (dataFile,
                           
                           # a single numeric value (for constant increments) or a numeric vector (for variable increments)
                           nonEffInterval,
+
+                          ## specifies the estimand(s) to use for non-efficacy monitoring
+                          nonEffEst = c("combined","cuminc","cox"),
                   
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
@@ -242,16 +245,25 @@ monitorTrial <- function (dataFile,
                           alphaStage1,
                           alphaUncPower=NULL,
                           
+                          ## Argument 'estimand' is deprecated, it is being replaced by two new 
+                          ## arguments for clarity/accuracy: 'nonEffEst' and 'effEst' 
+                          ##   'nonEffEst' specifies the estimand(s) to use for non-efficacy 
+                          ##      monitoring.  It takes the same values as 'estimand' did. 
+                          ##   'effEstf' specifies the estimand to use for efficacy analyses
+                          ##      only a single estimand can be chosen
                           estimand=c("combined", "cox", "cuminc"),
+
+                          ##  Specifies the estimand used for efficacy analyses, both interim and final
+                          ## 
+                          ##  If not user-specified, it will take a value based on argument 'estimand'
+                          ##  if that has been specified, and if 'estimand' isn't specified, it defaults
+                          ##  to "cuminc". 
+                          effEst = c("cuminc","cox"),
                   
                           ## 'laggedMonitoring' replaces argument 'post6moMonitor' and 
                           ## 'lagTime' replaces 'VEcutoffWeek'
                           laggedMonitoring=FALSE,
                           lagTime = NULL,
-
-                          ## New argument - should be a list with named components used to pass
-                          ## all control info needed for the implementation of efficacy monitoring
-                          effMonControl = NULL,
                   
                           saveFile= NULL,
                           saveDir = NULL,
@@ -292,7 +304,41 @@ monitorTrial <- function (dataFile,
   ##       reject H0: VE <= (lowerVEuncPower * 100)% 
 
 
-  estimand <- match.arg(estimand)
+  ## Process argument 'estimand', which has been deprecated.  This code chunk
+  ## can be removed in the future, when 'estimand' is completely removed.
+  ## ------------------------------------------------------------------------
+  # Check to see if 'estimand' is still in the argument list and if so, do further processing
+  if ( "estimand" %in% names(formals()) ) {
+
+     # if estimand was specified, issue a deprecation message
+     if ( !missing(estimand) ) { 
+        cat("Warning: Use of argument 'estimand' is deprecated.  Please use arguments \n",
+            "         'nonEffEst' and 'effEst' to specify the estimands to be used for \n",
+            "         non-efficacy monitoring and efficacy analyses respectively\n" )
+
+        estimand <- match.arg(estimand)
+
+        ## use value of 'estimand' to fill in values for nonEffEst and effEst, if they
+        ## have not been not specified
+        if ( missing(nonEffEst) ) 
+           nonEffEst <- estimand
+
+        ## We need a single estimand for efficacy analyses.  If 'combined' is specified then
+        ## then set to 'cuminc'.  Note that this has always been being done - silently - for
+        ## the final analysis (which was the only efficacy analysis)
+        if ( missing(effEst) )
+           effEst <- ifelse( estimand == "combined", "cuminc" , estimand)
+     } else {
+        # 'estimand' not specified
+        nonEffEst <- match.arg(nonEffEst)
+        effEst    <- match.arg(effEst)
+     }
+  } else {
+     ## 'estimand' no longer in argument list 
+     nonEffEst <- match.arg(nonEffEst)
+     effEst    <- match.arg(effEst)
+  }
+
   nonEffIntervalUnit <- match.arg(nonEffIntervalUnit)
   nonEffStartMethod  <- match.arg(nonEffStartMethod)
   
@@ -322,6 +368,11 @@ monitorTrial <- function (dataFile,
   if (is.null(alphaAltVE) && !is.null(altVE)) {
       alphaAltVE <- ifelse(!is.null(alphaUncPower), alphaUncPower, alphaStage1)
   }
+
+  ## --- New code to process efficacy arguments ---
+ 
+  
+
 
   ## ----------------------------------------------------------------------
   ##   The following code is needed to determine infection count at which to 
@@ -600,7 +651,7 @@ monitorTrial <- function (dataFile,
                      analysisType = "stopTime",
                      lowerVE = altVE,
                      alphaLevel = alphaAltVE,
-                     estimand = estimand,
+                     estimand = effEst,
                      time = harmRes$stopTime,
                      randFraction = null.p )
 
@@ -620,7 +671,7 @@ monitorTrial <- function (dataFile,
                   stopInfectSplit = harmRes$stopInfectSplit,
                   stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
                   stopVE_CI= VE_CI,
-                  VE_estimand = estimand,
+                  VE_estimand = effEst,
                   stage1complete = FALSE,
                   stage2complete = FALSE,
                   altDetected = fst$altDetected  )
@@ -705,7 +756,7 @@ monitorTrial <- function (dataFile,
                   alphaLevel = alphaNoneff,
                   laggedMonitoring = laggedMonitoring,
                   lagTime = lagTime,
-                  estimand=estimand,
+                  estimand= nonEffEst,
                   randFraction = null.p )
 
           ## if noneff hit, then store results and go to next arm
@@ -717,7 +768,7 @@ monitorTrial <- function (dataFile,
                         analysisType = "stopTime",
                         lowerVE = altVE,
                         alphaLevel = alphaAltVE,
-                        estimand = estimand,
+                        estimand = effEst,
                         time = futRes$stopTime,
                         randFraction = null.p )
 
@@ -733,7 +784,7 @@ monitorTrial <- function (dataFile,
                   c( futRes,
                      list( stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
                            stopVE_CI= VE_CI,
-                           VE_estimand = estimand,
+                           VE_estimand = effEst,
                            firstNonEffCnt = N1,
                            stage1complete = FALSE,
                            stage2complete = FALSE,
@@ -753,7 +804,7 @@ monitorTrial <- function (dataFile,
                             lowerVE = highVE,
                             alphaLevel = alphaHigh,
                             laggedMonitoring = FALSE,
-                            estimand=estimand,
+                            estimand=effEst,
                             randFraction = null.p )
 
           if ( highEffRes$boundWasHit ) {
@@ -762,7 +813,7 @@ monitorTrial <- function (dataFile,
                          analysisType = "stopTime", 
                          lowerVE = altVE, 
                          alphaLevel = alphaAltVE, 
-                         estimand = estimand, 
+                         estimand = effEst, 
                          time = highEffRes$stopTime,
                          randFraction = null.p )
 
@@ -781,7 +832,7 @@ monitorTrial <- function (dataFile,
                      list( summNonEff = futRes$summObj,
                            stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
                            stopVE_CI= VE_CI,
-                           VE_estimand = estimand,
+                           VE_estimand = effEst,
                            firstNonEffCnt = N1,
                            stage1complete = FALSE, 
                            stage2complete = FALSE,
@@ -801,7 +852,7 @@ monitorTrial <- function (dataFile,
                  stage1VE = stage1VE,
                  lowerVE = altVE,
                  alphaLevel = alphaStage1, 
-                 estimand = estimand, 
+                 estimand = effEst, 
                  boundLabels=c("Eff", "NonEffFinal"),
                  randFraction = null.p )
 
@@ -818,7 +869,7 @@ monitorTrial <- function (dataFile,
           c( fst,
              list( stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
                    stopVE_CI= VE_CI,
-                   VE_estimand = estimand,
+                   VE_estimand = effEst,
                    firstNonEffCnt = N1,
                    summNonEff  = futRes$summObj,
                    stage1complete = TRUE,
@@ -847,7 +898,7 @@ monitorTrial <- function (dataFile,
                  lowerVE = highVE,
                  alphaLevel = alphaHigh,
                  laggedMonitoring = FALSE,
-                 estimand=estimand,
+                 estimand=effEst,
                  randFraction = null.p )
 
 
@@ -924,7 +975,7 @@ monitorTrial <- function (dataFile,
               "a list.\n\n", immediate.=TRUE)
         saveFile <- paste0("monitorTrial", 
                            substr(dataFile, 9, nchar(dataFile)-6), 
-                           "_", estimand, ".RData")
+                           "_", nonEffEst, ".RData")
     }
     save(out, file = file.path(saveDir, saveFile) )
     if (verbose) { 
