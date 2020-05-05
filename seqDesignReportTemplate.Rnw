@@ -28,6 +28,9 @@
 <<label=inputParameters, results='asis', echo=FALSE, warning=FALSE, message=FALSE>>=
 rm(list=ls(all=TRUE))
 library(xtable)
+#library(seqDesign)
+# for now, source seqDesign from the master branch
+source("h:/SCHARP/seqDesign/code/source_seqDesign.R")
 
 # THE BELOW USER-SPECIFIED VALUES ARE AUTOMATICALLY APPLIED TO THE ENTIRE REPORT
 N.pla <- 1900            # number of subjects in the control arm
@@ -37,7 +40,9 @@ infRate <- 0.04          # annual incidence in the control arm
 estimand <- "cuminc"     # VE estimand definition
 laggedMonitoring <- TRUE # should post-6 months non-efficacy monitoring be applied?
 lowerVEuncPower <- 0     # a numeric vector if unconditional powers to reject null hypotheses H0: VE(0-stage1) <= lowerVEuncPower[i]*100% should be reported; NULL otherwise
-srcDir <- "./"           # a directory storing output from simTrial, monitorTrial, censTrial, rankTrial, and VEpowerPP
+#srcDir <- "./"           # a directory storing output from simTrial, monitorTrial, censTrial, rankTrial, and VEpowerPP
+# for now, point to where .RData output files are stored
+srcDir <- "h:/SCHARP/seqDesign/Routput"
 # END OF USER-SPECIFIED VALUES
 @
 
@@ -283,7 +288,32 @@ if (N.vax.arms>1){
 }
 @
 
+\newpage
+<<label=tabEventAccrual, results='asis', echo=FALSE>>=
+aveVE <- 0.4
+pMissVax <- 0.05
+tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
+                                     atEvents=seq(80, 200, by=20), lagTimePP=26)
+# convert time variables to month
+tableEventAccrual[, 2] <- tableEventAccrual[, 2] / (52 / 12)
+tableEventAccrual[, 3] <- tableEventAccrual[, 3] / (52 / 12)
 
+print(xtable(tableEventAccrual,
+             digits=c(0, 0, 1, 1),
+             align=rep("r", NCOL(tableEventAccrual) + 1),
+             caption=paste0("Median time since first enrollment to accrue given endpoint totals in the MITT and PP cohorts, under average VE of ",aveVE*100,"\\%, halved in the initial 6 months ($N=",N.pla,"$ in the placebo group, $N=",N.vax,"$ in each vaccine group, and ",pMissVax*100,"\\% conditional probability of having missed a vaccination given HIV-negative and ongoing at the Month 6 [Week 26] visit).")),
+      table.placement="H",
+      caption.placement="top",
+      include.rownames=FALSE,
+      include.colnames=FALSE,
+      #scalebox=0.9,
+      hline.after=NULL,
+      add.to.row=list(pos=list(0, NROW(tableEventAccrual)),
+                      command=c("\\hline \\hline Endpoint & Med Months & Med Months \\\\\n Total & MITT & PP \\\\\n \\hline",
+                                "\\hline \\hline")))
+@
+
+\newpage
 <<label=tableNvaccInfPostM6WithMonitor, results='asis', echo=FALSE>>=
 infThroughWeekVec <- c(78, 104, 156)
 pMissVax <- 0.05
