@@ -234,14 +234,10 @@ monitorTrial <- function (dataFile,
                           ## values other than the defaults.
                           nonEffStartParams=NULL,
                   
-                          #minCnt,
-                          #maxCnt, ## the maximum start of non-efficacy monitoring
-                          #minPct,
-                          #week1,
-                          #minCnt2,
-                          #week2,
-                  
                           nonEffIntervalUnit=c("counts","time"),
+  
+                          nonEffTimes=NULL,
+                          nonEffTimeUnit=c("counts","time"),
                           
                           # a single numeric value (for constant increments) or a numeric vector (for variable increments)
                           nonEffInterval,
@@ -347,7 +343,13 @@ monitorTrial <- function (dataFile,
   }
 
   nonEffIntervalUnit <- match.arg(nonEffIntervalUnit)
+  nonEffTimeUnit     <- match.arg(nonEffTimeUnit)
   nonEffStartMethod  <- match.arg(nonEffStartMethod)
+
+  if (!is.null(nonEffTimes) ) {
+    ## disable start method, since not needed
+    nonEffStartMethod <- ""
+  }
   
   if ( is.list(dataFile) ) {
     trialObj <- dataFile
@@ -377,8 +379,6 @@ monitorTrial <- function (dataFile,
   }
 
   ## --- New code to process efficacy arguments ---
- 
-  
 
 
   ## ----------------------------------------------------------------------
@@ -429,6 +429,16 @@ monitorTrial <- function (dataFile,
          "with nonEffStartMethods '?' and 'old'.\n","Lagged monitoring is now ",
          "implemented based on lagged infection counts while these two start ",
          "methods return unlagged monitoring start counts.\n\n")
+
+  if ( !is.null(nonEffTimes) && nonEffTimeUnit == "counts")  {
+    nonEffCnts <- nonEffTimes
+    if (!laggedMonitoring) {
+      N1 <- nonEffCnts[1]
+      N1.lag <- N1
+    } else {
+      N1.lag <- nonEffCnts[1]
+    }
+  }
          
   if ( nonEffStartMethod == "FKG") {
  
@@ -745,7 +755,7 @@ monitorTrial <- function (dataFile,
            
           ## For now we do nothing, except skip all the interim analysis code
           ## and go directly to the finalStage1 test
-          nonEffTimes <- NA
+          nonEffTimes.ij <- NA
 
           ## create an empty object futRes needed later to make code work
           futRes <- list()
@@ -754,51 +764,59 @@ monitorTrial <- function (dataFile,
           ## N1 <- NA
 
       } else {  # This 'else' goes on FOREVER!
-    
+          
           ## determine 'nonEffTimes' and then do non-eff monitoring
           ## Determine the times at which nonEff monitoring will occur
-          if (nonEffIntervalUnit == "counts") {
+          if (is.null(nonEffTimes)) {
+            if (nonEffIntervalUnit == "counts") {
 
-            ## makes sequence of counts at which analyses will be done
-            if (length(nonEffInterval)==1){
-              # then a constant increment in the endpoint count is assumed
-              nonEffCnts <- seq(from = N1.lag, to = nInfec_nonEff, by = nonEffInterval)  
-            } else {
-              # then 'nonEffInterval' is a vector of potentially variable increments
-              # specifying endpoint counts for subsequent interim looks following the
-              # initial look
-              nonEffCnts <- cumsum(c(N1.lag, nonEffInterval))
-            }
-
-            ## Convert counts into times.  
-            nonEffTimes <- getInfectionTimes(datI.j, cnts=nonEffCnts, lagTime=lagTime )
-
-          } else {
-              ## User specified a time-sequence for monitoring. Figure out when the first 
-              ## time and last times will be, then create the sequence
-              firstLastnonEffTimes <- 
-                  getInfectionTimes(datI.j, cnts=c(N1.lag, nInfec_nonEff), lagTime=lagTime)
-
+              ## makes sequence of counts at which analyses will be done
               if (length(nonEffInterval)==1){
-                nonEffTimes <- 
-                  seq(from = firstLastnonEffTimes[1],
-                      to = firstLastnonEffTimes[2],
-                      by = nonEffInterval)
+                # then a constant increment in the endpoint count is assumed
+                nonEffCnts <- seq(from = N1.lag, to = nInfec_nonEff, by = nonEffInterval)  
               } else {
-                # then 'nonEffInterval' is a vector of potentially variable time increments
-                #nonEffTimes <- c(firstLastnonEffTimes[1], firstLastnonEffTimes[1] + cumsum(nonEffInterval))
-                nonEffTimes <- cumsum( c(firstLastnonEffTimes[1], nonEffInterval) )
-
-                ## truncate so that nonEffTimes don't go beyond the trial duration
-                nonEffTimes <- nonEffTimes[ nonEffTimes <= firstLastnonEffTimes[2] ]
+                # then 'nonEffInterval' is a vector of potentially variable increments
+                # specifying endpoint counts for subsequent interim looks following the
+                # initial look
+                nonEffCnts <- cumsum(c(N1.lag, nonEffInterval))
               }
+
+              ## Convert counts into times.  
+              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, lagTime=lagTime )
+            } else {
+                ## User specified a time-sequence for monitoring. Figure out when the first 
+                ## time and last times will be, then create the sequence
+                firstLastnonEffTimes <- 
+                    getInfectionTimes(datI.j, cnts=c(N1.lag, nInfec_nonEff), lagTime=lagTime)
+
+                if (length(nonEffInterval)==1){
+                  nonEffTimes.ij <- 
+                    seq(from = firstLastnonEffTimes[1],
+                        to = firstLastnonEffTimes[2],
+                        by = nonEffInterval)
+                } else {
+                  # then 'nonEffInterval' is a vector of potentially variable time increments
+                  #nonEffTimes <- c(firstLastnonEffTimes[1], firstLastnonEffTimes[1] + cumsum(nonEffInterval))
+                  nonEffTimes.ij <- cumsum( c(firstLastnonEffTimes[1], nonEffInterval) )
+
+                  ## truncate so that nonEffTimes don't go beyond the trial duration
+                  nonEffTimes.ij <- nonEffTimes[ nonEffTimes <= firstLastnonEffTimes[2] ]
+                }
+            }
+          } else {
+            ## if nonEffTimes was specified
+            if (nonEffTimeUnit == "time")  {
+              nonEffTimes.ij <- nonEffTimes
+            } else {
+              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, lagTime=lagTime )
+            }
           }
 
           ## run non-eff 
           futRes <- 
               applyStopRules (
                   datI.j,
-                  testTimes = nonEffTimes,
+                  testTimes = nonEffTimes.ij,
                   boundType = "nonEff",
                   boundLabel = "NonEffInterim", 
                   lowerVE = lowerVEnoneff,
@@ -849,7 +867,7 @@ monitorTrial <- function (dataFile,
           ##    nonEff monitoring ), but using all data  
           highEffRes <- applyStopRules(
                             datIall.j,
-                            testTimes = nonEffTimes,
+                            testTimes = nonEffTimes.ij,
                             boundType = "highEff",
                             boundLabel = "HighEff", ## assumed by later function
                             lowerVE = highVE,
