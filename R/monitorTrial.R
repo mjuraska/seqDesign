@@ -18,6 +18,15 @@
 #' @param nonEffStartParams a list with named components specifying parameters required by \code{nonEffStartMethod} (\code{NULL} by default)
 #' @param nonEffIntervalUnit a character string specifying whether intervals between two adjacent non-efficacy interim analyses should be event-driven (default option "\code{counts}") or calendar time-driven (option "\code{time}")
 #' @param nonEffInterval a numeric vector (a number of infections or a number of weeks) specifying the timing of non-efficacy interim analyses. If a single numeric value is specified, then all interim looks are equidistant (in terms of the number of infections or weeks), and the value specifies the constant increment of information or time between two adjacent interim looks. If a numeric vector with at least two components is specified, then, following the initial interim look, the timing of subsequent interim looks is determined by (potentially differential) increments of information or time specified by this vector.
+#' @param nonEffTimes allows the user to directly specify the full vector of times at 
+#'  they wish to have non-efficacy analyses performed.  The "times" provided can either
+#'  be in terms of 'calendar time' - the time (in weeks) since the trial started - or
+#'  in terms of infection counts.  If counts are provided, and argument laggedMonitoring
+#'  is TRUE, then the counts will be interpreted as "lagged counts", infections that 
+#'  occurred after the specified 'lagTime' of follow-up.  The unit of time for 
+#'  nonEffTimes is specified by argument nonEffTimeUnit.
+#' @param nonEffTimeUnit specifies the unit of measure for the values provided by arg.
+#'  nonEffTimes.  Possible values are "counts" and "time", defaulting to "counts"
 #' @param lowerVEnoneff specifies criterion 1 for declaring non-efficacy: the lower bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{lowerVEnoneff} (typically set equal to 0). If \code{NULL} (default), this criterion is ignored.
 #' @param upperVEnoneff specifies criterion 2 for declaring non-efficacy: the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{upperVEnoneff} (typically a number in the 0--0.5 range)
 #' @param highVE specifies a criterion for declaring high-efficacy: the lower bound of the two-sided (1-\code{alphaHigh}) x 100\% confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range). To turn off high efficacy monitoring, set \code{highVE} equal to 1.
