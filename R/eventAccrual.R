@@ -18,6 +18,7 @@ quantile2 <- function(x, probs, na.ub=0.2){
 #' @param lagTimeMITT a time point (in weeks). Only events with time-to-event \eqn{\ge} \code{lagTimeMITT} are counted in the MITT column (default is 0).
 #' @param lagTimePP a time point (in weeks). If specified, only PP events with time-to-event \eqn{\ge} \code{lagTimePP} are counted in the PP column.
 #' @param namePP a character string specifying the name of the column in each data frame in \code{trialData} which indicates membership in the PP cohort (default is "\code{pp1}")
+#' @param na.ub a numeric value specifying an upper limit on the fraction of simulated trials that do not reach a given event count in \code{atEvents} to still compute the empirical quantile of time-to-accrual. If the fraction of such trials exceeds \code{na.ub}, \code{NA} will be produced.
 #' 
 #' @details All time variables use week as the unit of time.
 #' 
@@ -50,7 +51,7 @@ quantile2 <- function(x, probs, na.ub=0.2){
 #' @seealso \code{\link(simTrial)}
 #' 
 #' @export
-tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, lagTimeMITT=0, lagTimePP=NULL, namePP="pp1"){
+tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, lagTimeMITT=0, lagTimePP=NULL, namePP="pp1", na.ub=0.2){
   if ((is.null(atEvents) & is.null(atWeeks)) | (!is.null(atEvents) & !is.null(atWeeks))){
     stop("Exactly one of the two arguments 'atEvents' and 'atWeeks' must be specified.")
   }
@@ -118,7 +119,7 @@ tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, la
     }, atEvents=atEvents, lagTimeMITT=lagTimeMITT, lagTimePP=lagTimePP, namePP=namePP)
     
     # generate a vector of empirical quantiles (at probability 'prob') of the time distributions from the first enrollment until each MITT event count in 'atEvents'
-    atEventsTimeQtilesMITT <- round(apply(sapply(atEventsTimes, "[[", "timesMITT"), 1, quantile2, probs=prob, na.ub=0.2), digits=1)
+    atEventsTimeQtilesMITT <- round(apply(sapply(atEventsTimes, "[[", "timesMITT"), 1, quantile2, probs=prob, na.ub=na.ub), digits=1)
     
     # initialize the output data frame
     out <- data.frame(atEvents, atEventsTimeQtilesMITT)
@@ -126,7 +127,7 @@ tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, la
     
     if (!is.null(lagTimePP)){
       # generate a vector of empirical quantiles (at probability 'prob') of the time distributions from the first enrollment until each PP event count in 'atEvents'
-      out$atEventsTimeQtilesPP <- round(apply(sapply(atEventsTimes, "[[", "timesPP"), 1, quantile2, probs=prob, na.ub=0.2), digits=1)
+      out$atEventsTimeQtilesPP <- round(apply(sapply(atEventsTimes, "[[", "timesPP"), 1, quantile2, probs=prob, na.ub=na.ub), digits=1)
       colnames(out)[3] <- paste0("weeks_qtile", prob, "_PP")
     }
     
@@ -183,7 +184,7 @@ tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, la
     }, atWeeks=atWeeks, lagTimeMITT=lagTimeMITT, lagTimePP=lagTimePP, namePP=namePP)
     
     # generate a vector of empirical quantiles (at probability 'prob') of the event count distributions up to each time point in 'atWeeks'
-    atWeeksEventQtilesMITT <- apply(sapply(atWeeksEvents, "[[", "eventsMITT"), 1, quantile2, probs=prob, na.ub=0.2)
+    atWeeksEventQtilesMITT <- apply(sapply(atWeeksEvents, "[[", "eventsMITT"), 1, quantile2, probs=prob, na.ub=na.ub)
     
     # initialize the output data frame
     out <- data.frame(atWeeks, atWeeksEventQtilesMITT)
@@ -191,7 +192,7 @@ tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, la
     
     if (!is.null(lagTimePP)){
       # generate a vector of empirical quantiles (at probability 'prob') of the time distributions from the first enrollment until each PP event count in 'atEvents'
-      out$atWeeksEventQtilesPP <- apply(sapply(atWeeksEvents, "[[", "eventsPP"), 1, quantile2, probs=prob, na.ub=0.2)
+      out$atWeeksEventQtilesPP <- apply(sapply(atWeeksEvents, "[[", "eventsPP"), 1, quantile2, probs=prob, na.ub=na.ub)
       colnames(out)[3] <- paste0("events_qtile", prob, "_PP")
     }
     

@@ -29,7 +29,7 @@
 rm(list=ls(all=TRUE))
 library(xtable)
 #library(seqDesign)
-# for now, source seqDesign from the master branch
+# for now, source seqDesign from the local master branch
 source("h:/SCHARP/seqDesign/code/source_seqDesign.R")
 
 # THE BELOW USER-SPECIFIED VALUES ARE AUTOMATICALLY APPLIED TO THE ENTIRE REPORT
@@ -98,7 +98,7 @@ print(xtable(res,
 
 \begin{figure}[H]
 \begin{center}
-<<label=plotOutcomeProbs, echo=FALSE, results='asis', fig.width=10, fig.height=7>>=
+<<label=plotOutcomeProbs, echo=FALSE, results='asis', fig.width=10, fig.asp=0.7, out.width='95%'>>=
 res <- subset(res, aveHR<=1)
   
 par(mar=c(4.5,5,3,1.5), las=1, cex.axis=1.2, cex.lab=1.3, cex.main=1.2)
@@ -133,7 +133,7 @@ cat("\\caption{Probabilities of reaching each possible trial monitoring outcome"
 
 \begin{figure}[H]
 \begin{center}
-<<label=plotUncPowerPP, echo=FALSE, fig.width=10, fig.height=7>>=
+<<label=plotUncPowerPP, echo=FALSE, fig.width=10, fig.asp=0.7, out.width='95%'>>=
 fullVE <- function(aveVE, vePeriods){ aveVE * (vePeriods[3]-1)/((vePeriods[3]-1)-(vePeriods[2]-1)/2) }
 
 pwrPP.filename <- paste0("VEpwPP_nPlac=",N.pla,"_nVacc=",N.vax,"_infRate=",infRate,".RData")
@@ -170,7 +170,7 @@ legend(0.55, 0.65, lty=ltyNames, col=colNames, lwd=2, title="Missing Vaccination
 \newpage
 \begin{figure}[H]
 \begin{center}
-<<label=plotDuration1VaxArmEvaluation, echo=FALSE, fig.width=10, fig.height=7>>=
+<<label=plotDuration1VaxArmEvaluation, echo=FALSE, fig.width=10, fig.asp=0.7, out.width='95%'>>=
 cumProbTrialDuration1VaxArm <- function(simTrial.filename, monitorTrial.filename, dirname, stage2=156){
   load(file.path(dirname, simTrial.filename))
   trialData <- trialObj[["trialData"]]
@@ -232,7 +232,7 @@ text(x=30, y=0.95, labels="Vaccinations through\nmonth 12 completed", cex=1.2, p
 \end{center}
 \end{figure}
 
-<<label=plotTrialDuration, results='asis', echo=FALSE, fig.width=10, fig.height=7>>=
+<<label=plotTrialDuration, results='asis', echo=FALSE, fig.width=10, fig.asp=0.7, out.width='95%'>>=
 cumProbTrialDuration <- function(trialDataCens.filename, dirname, stage2=156){
   load(file.path(dirname, trialDataCens.filename))
   
