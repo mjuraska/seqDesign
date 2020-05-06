@@ -900,17 +900,17 @@ censorTrial <- function(d, times, arms=NULL, timeScale=c("calendar","follow-up")
     ## - If the output is multiple trials each at a single time, then remove
     ##     the inner list.
     ## [note: 'unlist()' not used as it strips off the data.frame attribute ]
-
-    if (nTrials==1 && nTimes==1)
+    if (nTrials==1 && nTimes==1) 
         return( cens[[1]][[1]] )
+    
 
     if (nTrials==1 && nTimes>1)
         return( cens[[1]] )
 
     if (nTrials>1 && (nTimes==1 || 
-          (is.list(times) && all(unlist(lapply(times,length))==1)) ) )
+          (is.list(times) && all(unlist(lapply(times,length))==1)) ) ) 
         return( lapply(cens, function(x) x[[1]] ) )
-
+    
     return( cens )
 
   } else {

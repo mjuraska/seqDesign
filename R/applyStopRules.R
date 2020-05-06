@@ -30,8 +30,10 @@ applyStopRules <-
   ## 
   ## Other arguments:
   ## ---------------
-  ## infectionTotals - a vector specifying the total number of infections
-  ##                     at which analyses should take place.  
+  ## infectionTotals - a vector specifying the total number of infections at which 
+  ##                   analyses should take place.  The totals (or "counts") are 
+  ##                   assumed to be on the lagged scale (i.e. only lagged events
+  ##                   counted) if laggedMonitoring is TRUE
   ## 
   ## testTimes   - a vector specifying the calendar times at which noneff analyses
   ##                 should take place.  Either this arg. or 'infectionTotals' must
@@ -96,6 +98,15 @@ applyStopRules <-
     }
   }
 
+  ## if laggedMonitoring is FALSE, but lagTime is non-null, issue a warning and 
+  ## set lagTime to NULL
+  if (!laggedMonitoring && !is.null(lagTime)) {
+    cat("Warning: applyStopRules has been called with laggedMonitoring set to FALSE",
+        " but a non-NULL value was provided for lagTime.\n", "Please fix this. ",
+        "We will reset lagTime to NULL and continue.\n\n", sep="")
+    lagTime <- NULL
+  }
+
   ## Make sure we have only two trt groups and that they're coded as 0 and 1
   uniq.trt <- sort( unique(d$trt) )
   if ( length(uniq.trt)>2 ) {
@@ -127,9 +138,11 @@ applyStopRules <-
 
 
   ## If 'infectionTotals' was given, then need to get associated times
+  ## We need to do this in a way that takes into account whether laggedMonitoring
+  ## was specified.  If so, the counts are assumed to be on the lagged scale.
   if ( is.null(testTimes) ) {
     if ( !is.null(infectionTotals) ) {
-        testTimes <- getInfectionTimes(d, cnts=infectionTotals)  
+        testTimes <- getInfectionTimes(d, cnts=infectionTotals, lagTime=lagTime)  
     } else {
       stop("One of the arguments ('infectionTotals', 'testTimes') must be specified\n") 
     }

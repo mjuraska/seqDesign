@@ -883,6 +883,10 @@ simFullEDIdata <-
 ##        counted when determining the infection totals.  If unspecified
 ##        all data is used (i.e. arms are not considered)
 ##
+## lagTime: Specifies a lagTime to use for inclusion of infections.  Only infections
+##          occurring after the specified lagTime (measured from enrollment) will be
+##          counted.
+##
 ##  ... :  Not used.  Purpose is to force exact specification of arguments
 ##         that follow it.
 ##
@@ -898,10 +902,8 @@ simFullEDIdata <-
 ##   associated infection totals (given by, or in 'cnts') is reached.
 ##
 
-##getInfectionTimes <- function( d , cnts, arms=c(0,1), ..., SIMPLIFY=TRUE)
-getInfectionTimes <- function( d , cnts, arms=NULL, ..., SIMPLIFY=TRUE)
+getInfectionTimes <- function( d , cnts, arms=NULL, lagTime=NULL, ..., SIMPLIFY=TRUE)
 {
-
   ## if 'cnts' is a list, then 'd' must be too
   if (is.list(cnts) && (!is.list(d) || length(d)!=length(cnts)) )
       stop("When 'cnts' is a list, then 'd' must also be a list and their",
@@ -913,9 +915,16 @@ getInfectionTimes <- function( d , cnts, arms=NULL, ..., SIMPLIFY=TRUE)
           } else {
               as.integer(cnts)
           } 
+
+  ## if lagTime has been specified, then left censor the data to that follow-up time
+  if ( !is.null(lagTime) && lagTime>0.001 ) {
+    d <- censorTrial(d, times=lagTime, timeScale="follow-up", type="left")
+  }
+
   ## place 'd' inside a list if it's just a single data.frame
   if ( is.data.frame(d) )
      d <- list( d )
+
 
   ## define function to 'apply' to all datasets (lapply or mapply)
   laf <- function(x, cnt, arms=NULL) {

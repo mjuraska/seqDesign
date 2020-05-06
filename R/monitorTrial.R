@@ -123,12 +123,10 @@ monitorTrial <- function (dataFile,
                           ## will be spent.  Please note that this argument does *NOT* dictate
                           ## when harm monitoring will END.  The range dictates when it will
                           ## START, and over what range the type-I error will be spread.  If
-                          ## you plan to use nonEffStartMethod "FKG" or "fixed" then the 
-                          ## 'stop' value of the range, if provided by the user, will not be
-                          ## used and need not be specified. It may also be replaced with an NA.
-                  
-                          ## bounds are created.  The 'start' component will determine when 
-                          ## harm monitoring beings.
+                          ## you plan to use nonEffStartMethod "FKG" or "fixed" without lagged
+                          ## Monitoring (i.e. laggedMonitoring=FALSE) then the 'stop' value of
+                          ## the range, if provided, will not be used and need not be specified
+                          ## or may be replaced with an NA.
                           harmMonitorRange, 
                   
                           ## Total Type I error for potential harm monitoring (per vacc. arm)
@@ -206,7 +204,7 @@ monitorTrial <- function (dataFile,
                           ##         minCnt - gives the minimum (combined) infection count at which
                           ##               monitoring can being
                           ##         maxCnt - gives the maximum (combined) infection count at which
-                          ##               monitoring can being (it will begin at this count 
+                          ##               monitoring can begin (it will begin at this count 
                           ##               whether or not the other criteria are satisfied).
                           ##               [OPTIONAL]
                           ##         lagTimes, lagMinCnts - these arguments are paired, each can
@@ -261,9 +259,12 @@ monitorTrial <- function (dataFile,
                           alphaStage1,
                           alphaUncPower=NULL,
                           
-                          ## 'laggedMonitoring' replaces argument 'post6moMonitor' and 
-                          ## 'lagTime' replaces 'VEcutoffWeek'
+                          ## 'laggedMonitoring' indicates whether lagged monitoring should be
+                          ## used IN ADDITION TO unlagged monitoring 
                           laggedMonitoring=FALSE,
+
+                          ## 'lagTime' is required if laggedMonitoring is TRUE and indicates the
+                          ## size of the lag
                           lagTime = NULL,
 
                           ## Allows user to specify a lag time (in weeks) for efficacy analyses.
@@ -423,6 +424,12 @@ monitorTrial <- function (dataFile,
   ##    p = prob. of assignment to the vaccine arm vs. the placebo arm (all 
   ##        other arms ignored for computing 'p')
   ##
+  if (nonEffStartMethod %in% c("?","old") && laggedMonitoring) 
+    stop("\n","Usage of argument of laggedMonitoring is no longer compatible ",
+         "with nonEffStartMethods '?' and 'old'.\n","Lagged monitoring is now ",
+         "implemented based on lagged infection counts while these two start ",
+         "methods return unlagged monitoring start counts.\n\n")
+         
   if ( nonEffStartMethod == "FKG") {
  
      if (!is.null(nonEffStartParams)) {  
@@ -455,29 +462,48 @@ monitorTrial <- function (dataFile,
             "from the argument 'upperVEnoneff' and 'alphaNoneff'\n",
             "Exiting...\n" )
  
-     N1 <- ceiling( qnorm(1 - alphaNE/2)^2 /
-                     ( null.p*(1-null.p)*log(1-upperVE)^2 ) )
-
-     ## set upperbound of 'harmMonitorRange' to be 'N1'
-     harmMonitorRange <- c(harmMonitorRange[1], N1)    
+     N1.lag <- ceiling(qnorm(1 - alphaNE/2)^2 /( null.p*(1-null.p)*log(1-upperVE)^2 ))
+     if (!laggedMonitoring) {
+       N1 <- N1.lag
+     }
 
   } else if ( nonEffStartMethod == "fixed" ) {
 
-    if (!is.null( nonEffStartParams$N1 ) ) {
-      N1 <- nonEffStartParams$N1
-      
-      ## set upperbound of 'harmMonitorRange' to be 'N1'
-      harmMonitorRange <- c(harmMonitorRange[1], N1)    
-    } else {
+    if (is.null( nonEffStartParams$N1 ) ) 
       stop("Argument 'nonEffStartMethod' was specified as 'fixed'. ",
            "This method requires\n", "you to provide an argument named",
            "'N1' via the list argument 'nonEffStartParams'\n.",
            "e.g. nonEffStartParams <- list(N1=60).  Please fix.\n" )
+
+    N1.lag <- nonEffStartParams$N1
+    if (!laggedMonitoring) {
+      N1 <- N1.lag
     }
+  } 
+
+  ## N1 should only exist if laggedMonitoring is FALSE, while N1.lag exists
+  ## otherwise (N1.lag also exists if N1 does).
+  ## Harm monitoring will end at N1 infections, so when "N1" exists, set the upper
+  ## limit of 'harmMonitorRange' to N1 so boundaries will be defined based on it
+  if ( exists("N1") ) {
+    harmMonitorRange <- c(harmMonitorRange[1], N1)
   }
 
-
   ## -------------------------- get harm bounds ---------------------------  
+
+  ## do a check on 'harmMonitorRange' to be sure it's correctly specified
+  if ( length(harmMonitorRange) != 2 || is.na(harmMonitorRange[2]) ||
+       is.infinite(harmMonitorRange[2]) ) {
+     if (laggedMonitoring==TRUE) {
+        stop("When laggedMonitoring is TRUE then the harmMonitoringRange must",
+             "be fully specified.\n","It should be a length 2 vector with both",
+             "values being integers.\n\n")
+     } else {
+        stop("When nonEffStartMethod is NOT one of 'FKG' or 'fixed', then ",
+             "harmMonitoringRange must be fully specified.\n", "It should be a ",
+             "length 2 vector with both values being integers.\n\n")
+     }
+  }
 
   # calculate stopping boundaries for harm
   ## NOTE: harmMonitorRange dictates that range over which the type-I error is
@@ -504,7 +530,7 @@ monitorTrial <- function (dataFile,
     maxCnt = N1
 
   } else if ( !exists("maxCnt") ) {
-    maxCnt = 5 * harmMonitorRange[2]
+    maxCnt = 2 * harmMonitorRange[2]
   }
 
   ## get harm bounds 
@@ -566,7 +592,6 @@ monitorTrial <- function (dataFile,
       }
       
 
-
       ## 1. do harm monitoring for j-th treatment arm vs. placebo
 
       ## subset events in relevant arms: j-th active trt and placebo(trt=0)
@@ -574,6 +599,10 @@ monitorTrial <- function (dataFile,
       nInfec <- nrow(E.j) # counts infections through 'stage1'
       E.j$nInf <- 1:nInfec
 
+
+      ## NOTE- both "?" and "old" start methods cannot be used with laggedMonitoring
+      ##       I added code stop() out if both are specified - so we can assume 
+      ##       that laggedMonitoring is FALSE hence N1 is truly N1
       if (nonEffStartMethod == "?") {
           if (!is.null(nonEffStartParams)) {
               argNames <- c("minCnt","maxCnt","lagTimes","lagMinCnts")
@@ -626,9 +655,18 @@ monitorTrial <- function (dataFile,
                      nInfecAfterwk = minCnt2,
                      week2 = week2)
       }
+      ## set N1.lag for the cases for which N1 was just defined (immed. above)
+      if ( !exists("N1.lag") && exists("N1") )
+        N1.lag <- N1
 
-      ## Ensure we have harm bounds up to value 'N1', if not, regenerate them 
-      ## so we have enough.
+      ## Now get 'N1' for the cases where we don't have it, which should only
+      ## be when laggedMonitoring was specified
+      if ( !exists("N1") && laggedMonitoring ) {
+        N1 <- getFirstNonEffCnt(datI.j, minCnt=N1.lag, 
+                                lagTimes=lagTime, lagMinCnts=N1.lag)
+      }
+
+      ## Ensure we have harm bounds up to 'N1', if not, regenerate them
       if (N1 > max(harmBounds$N)) {
           maxCnt <- 2 * N1
 
@@ -686,15 +724,22 @@ monitorTrial <- function (dataFile,
         next
       } 
 
-
       ## If harm bounds not hit, move to nonEff monitoring
 
       ## 2. begin non-eff monitoring prep
       ## --------------------------------
 
+      if ( isTRUE( laggedMonitoring ) ) {
+        datI.j.lag <- censorTrial(datI.j, times=lagTime, timeScale="follow-up", type="left")
+        nInfec.lagged <- sum( datI.j.lag$event == 1 )
+      }
 
-      if (N1 > nInfec) {
+      ## create new variable, 'nInfec_nonEff' that will contain the total number of
+      ## infections under the chosen method of non-efficacy monitoring (i.e based on
+      ## regular or lagged infections/events)
+      nInfec_nonEff <- ifelse(laggedMonitoring, nInfec.lagged, nInfec)
 
+      if (N1.lag > nInfec_nonEff ) {
           ## deal with annoying case where the trial didn't have enough infec.s
           ## to reach the start point of the non-eff. interim analyses
            
@@ -717,24 +762,22 @@ monitorTrial <- function (dataFile,
             ## makes sequence of counts at which analyses will be done
             if (length(nonEffInterval)==1){
               # then a constant increment in the endpoint count is assumed
-              nonEffCnts <- seq(from = N1, to = nInfec, by = nonEffInterval)  
+              nonEffCnts <- seq(from = N1.lag, to = nInfec_nonEff, by = nonEffInterval)  
             } else {
               # then 'nonEffInterval' is a vector of potentially variable increments
               # specifying endpoint counts for subsequent interim looks following the
               # initial look
-              #nonEffCnts <- c(N1, N1 + cumsum(nonEffInterval))
-              nonEffCnts <- cumsum(c(N1, nonEffInterval))
-
+              nonEffCnts <- cumsum(c(N1.lag, nonEffInterval))
             }
 
             ## Convert counts into times.  
-            nonEffTimes <- getInfectionTimes(datI.j, cnts=nonEffCnts )
+            nonEffTimes <- getInfectionTimes(datI.j, cnts=nonEffCnts, lagTime=lagTime )
+
           } else {
-              ## User specified a time-sequence for monitoring. Figure out when 
-              ## the first time will be, and the time of the last infection too,
-              ## then create the sequence
+              ## User specified a time-sequence for monitoring. Figure out when the first 
+              ## time and last times will be, then create the sequence
               firstLastnonEffTimes <- 
-                  getInfectionTimes(datI.j, cnts=c(N1, nInfec))
+                  getInfectionTimes(datI.j, cnts=c(N1.lag, nInfec_nonEff), lagTime=lagTime)
 
               if (length(nonEffInterval)==1){
                 nonEffTimes <- 
@@ -849,7 +892,7 @@ monitorTrial <- function (dataFile,
 
               next
           }
-      }  ## end of (N1 > nInfec) if/else clause
+      }  ## end of (N1.lag > nInfec_nonEff) if/else clause
 
 ##-----------------------------------------------------------------------
 
