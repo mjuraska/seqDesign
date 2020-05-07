@@ -313,10 +313,8 @@ for ( i in 1:nTrials )
     ## code treatments as integers: C1=0, T1=1, T2=2...
     trtCode <- match(EDI.i$trt, trtArms) - 1
 
-
     entry <- EDI.i$enrollTime
     exit  <- entry + EDI.i$futime
-
 
     ## create flag for HIV infection
     infected <- !is.na(EDI.i$infecDxTime)

@@ -1,16 +1,3 @@
-### This version is Sept 10, 2015
-###   I'm beginning major modification of the function to eliminate stuff that
-###   is unnecessary and makes no sense.
-###     - only one set up "upper","lower" parameters to be used for both 
-###       high eff and noneff.  Only one can be done at a time anyway.
-###     - the upper/lower arg.s will be in terms of VE and not HR, since all of
-###       thinking is done on the VE scale (and HR only applies to cox model)
-###     - removing all 'final analysis' related things, which will include
-###       the 'UncPower' params, Stage1 params, etc.
-###     - only one 'alpha' parameter
-###     - a more extensive set of output information
-###     - < etc >
-
 applyStopRules <- 
     function(d, infectionTotals=NULL, testTimes=NULL, 
              boundType = c("nonEff","highEff"), boundLabel=boundType,
