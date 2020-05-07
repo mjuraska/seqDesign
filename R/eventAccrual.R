@@ -119,7 +119,7 @@ tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, la
     }, atEvents=atEvents, lagTimeMITT=lagTimeMITT, lagTimePP=lagTimePP, namePP=namePP)
     
     # generate a vector of empirical quantiles (at probability 'prob') of the time distributions from the first enrollment until each MITT event count in 'atEvents'
-    atEventsTimeQtilesMITT <- round(apply(sapply(atEventsTimes, "[[", "timesMITT"), 1, quantile2, probs=prob, na.ub=na.ub), digits=1)
+    atEventsTimeQtilesMITT <- round(apply(matrix(sapply(atEventsTimes, "[[", "timesMITT"), nrow=length(atEvents)), 1, quantile2, probs=prob, na.ub=na.ub), digits=1)
     
     # initialize the output data frame
     out <- data.frame(atEvents, atEventsTimeQtilesMITT)
@@ -127,7 +127,7 @@ tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, la
     
     if (!is.null(lagTimePP)){
       # generate a vector of empirical quantiles (at probability 'prob') of the time distributions from the first enrollment until each PP event count in 'atEvents'
-      out$atEventsTimeQtilesPP <- round(apply(sapply(atEventsTimes, "[[", "timesPP"), 1, quantile2, probs=prob, na.ub=na.ub), digits=1)
+      out$atEventsTimeQtilesPP <- round(apply(matrix(sapply(atEventsTimes, "[[", "timesPP"), nrow=length(atEvents)), 1, quantile2, probs=prob, na.ub=na.ub), digits=1)
       colnames(out)[3] <- paste0("weeks_qtile", prob, "_PP")
     }
     
@@ -184,7 +184,7 @@ tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, la
     }, atWeeks=atWeeks, lagTimeMITT=lagTimeMITT, lagTimePP=lagTimePP, namePP=namePP)
     
     # generate a vector of empirical quantiles (at probability 'prob') of the event count distributions up to each time point in 'atWeeks'
-    atWeeksEventQtilesMITT <- apply(sapply(atWeeksEvents, "[[", "eventsMITT"), 1, quantile2, probs=prob, na.ub=na.ub)
+    atWeeksEventQtilesMITT <- apply(matrix(sapply(atWeeksEvents, "[[", "eventsMITT"), nrow=length(atWeeks)), 1, quantile2, probs=prob, na.ub=na.ub)
     
     # initialize the output data frame
     out <- data.frame(atWeeks, atWeeksEventQtilesMITT)
@@ -192,7 +192,7 @@ tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, la
     
     if (!is.null(lagTimePP)){
       # generate a vector of empirical quantiles (at probability 'prob') of the time distributions from the first enrollment until each PP event count in 'atEvents'
-      out$atWeeksEventQtilesPP <- apply(sapply(atWeeksEvents, "[[", "eventsPP"), 1, quantile2, probs=prob, na.ub=na.ub)
+      out$atWeeksEventQtilesPP <- apply(matrix(sapply(atWeeksEvents, "[[", "eventsPP"), nrow=length(atWeeks)), 1, quantile2, probs=prob, na.ub=na.ub)
       colnames(out)[3] <- paste0("events_qtile", prob, "_PP")
     }
     
