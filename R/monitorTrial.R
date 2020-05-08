@@ -363,6 +363,7 @@ monitorTrial <- function (dataFile,
         cat("Warning: Use of argument 'estimand' is no longer supported.\n\n",
             "Please specify efficacy and non-efficacy estimands separately within the\n\n",
             "'cohort' arguments: 'nonEffCohorts' and 'effCohort'","\n\n" )
+     }
   }
 
   nonEffIntervalUnit <- match.arg(nonEffIntervalUnit)
