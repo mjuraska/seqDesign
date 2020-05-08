@@ -574,7 +574,7 @@ finalStage1Test <- function(dat,
 
     ## if lagTime has been specified, then left censor the data of follow-up time
     if ( !is.null(lagTime) && lagTime > 0.01 ) {
-      dat <- censorTrial(censDatList, times=lagTime, timeScale="follow-up", type="left")
+      dat <- censorTrial(dat, times=lagTime, timeScale="follow-up", type="left")
     }
 
     if (analysisType=="stopTime") {
