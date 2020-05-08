@@ -289,11 +289,11 @@ if (N.vax.arms>1){
 @
 
 \newpage
-<<label=tabEventAccrual, results='asis', echo=FALSE>>=
+<<label=tabEventAccrual_atEvents_q0.5, results='asis', echo=FALSE>>=
 aveVE <- 0.4
 pMissVax <- 0.05
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
-                                     atEvents=seq(80, 200, by=20), lagTimePP=26)
+                                     atEvents=seq(80, 200, by=20), lagTimePP=26, prob=0.5, na.ub=0.3)
 # convert time variables to month
 tableEventAccrual[, 2] <- tableEventAccrual[, 2] / (52 / 12)
 tableEventAccrual[, 3] <- tableEventAccrual[, 3] / (52 / 12)
@@ -301,7 +301,7 @@ tableEventAccrual[, 3] <- tableEventAccrual[, 3] / (52 / 12)
 print(xtable(tableEventAccrual,
              digits=c(0, 0, 1, 1),
              align=rep("r", NCOL(tableEventAccrual) + 1),
-             caption=paste0("Median time since first enrollment to accrue given endpoint totals in the MITT and PP cohorts, under average VE of ",aveVE*100,"\\%, halved in the initial 6 months ($N=",N.pla,"$ in the placebo group, $N=",N.vax,"$ in each vaccine group, and ",pMissVax*100,"\\% conditional probability of having missed a vaccination given HIV-negative and ongoing at the Month 6 [Week 26] visit).")),
+             caption=paste0("Median time since first enrollment to accrue given endpoint totals in the MITT and PP cohorts, under average VE of ",aveVE*100,"\\%, halved in the initial 6 months ($N=",N.pla,"$ in the placebo group, $N=",N.vax,"$ in each vaccine group, 24 months of participant follow-up, ", infRate * 100, "\\% annual placebo incidence rate, 5\\% annual dropout rate, and ",pMissVax*100,"\\% conditional probability of having missed a vaccination given HIV-negative and ongoing at the Month 6 [Week 26] visit).")),
       table.placement="H",
       caption.placement="top",
       include.rownames=FALSE,
@@ -309,9 +309,115 @@ print(xtable(tableEventAccrual,
       #scalebox=0.9,
       hline.after=NULL,
       add.to.row=list(pos=list(0, NROW(tableEventAccrual)),
-                      command=c("\\hline \\hline Endpoint & Med Months & Med Months \\\\\n Total & MITT & PP \\\\\n \\hline",
-                                "\\hline \\hline")))
+                      command=c("\\hline \\hline Endpoint & Med Months* & Med Months* \\\\\n Total & MITT$^{\\dagger}$ & PP$^{\\ddag}$\\\\\n \\hline",
+                                "\\hline \\hline 
+                                \\multicolumn{3}{l}{\\footnotesize n/a is reported if $>30\\%$ of simulated trials} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad don't reach the endpoint total by 6 months} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize * Median time (in months)} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad since first enrollment} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Endpoints in the MITT cohort starting} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>0$ weeks after enrollment} \\\\\n 
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Endpoints in the PP cohort starting} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $\\geq 26$ weeks after enrollment}")))
 @
+
+\newpage
+<<label=tabEventAccrual_atEvents_q0.8, results='asis', echo=FALSE>>=
+aveVE <- 0.4
+pMissVax <- 0.05
+prob=0.8
+tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
+                                     atEvents=seq(80, 200, by=20), lagTimePP=26, prob=prob, na.ub=0.3)
+# convert time variables to month
+tableEventAccrual[, 2] <- tableEventAccrual[, 2] / (52 / 12)
+tableEventAccrual[, 3] <- tableEventAccrual[, 3] / (52 / 12)
+
+print(xtable(tableEventAccrual,
+             digits=c(0, 0, 1, 1),
+             align=rep("r", NCOL(tableEventAccrual) + 1),
+             caption=paste0(prob * 100, "$^{\\textrm{th}}$ percentile of the distribution of time since first enrollment to accrue given endpoint totals in the MITT and PP cohorts, under average VE of ",aveVE*100,"\\%, halved in the initial 6 months ($N=",N.pla,"$ in the placebo group, $N=",N.vax,"$ in each vaccine group, 24 months of participant follow-up, ", infRate * 100, "\\% annual placebo incidence rate, 5\\% annual dropout rate, and ",pMissVax*100,"\\% conditional probability of having missed a vaccination given HIV-negative and ongoing at the Month 6 [Week 26] visit).")),
+      table.placement="H",
+      caption.placement="top",
+      include.rownames=FALSE,
+      include.colnames=FALSE,
+      #scalebox=0.9,
+      hline.after=NULL,
+      add.to.row=list(pos=list(0, NROW(tableEventAccrual)),
+                      command=c(paste0("\\hline \\hline Endpoint & ", prob * 100, "$^{\\textrm{th}}$ \\%ile Months* & ", prob * 100, "$^{\\textrm{th}}$ \\%ile Months* \\\\\n Total & MITT$^{\\dagger}$ & PP$^{\\ddag}$\\\\\n \\hline"),
+                                paste0("\\hline \\hline 
+                                \\multicolumn{3}{l}{\\footnotesize n/a is reported if $>30\\%$ of simulated trials} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad don't reach the endpoint total by 6 months} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize * ", prob * 100, "$^{\\textrm{th}}$ percentile of time (in months)} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad since first enrollment} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Endpoints in the MITT cohort starting} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>0$ weeks after enrollment} \\\\\n 
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Endpoints in the PP cohort starting} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $\\geq 26$ weeks after enrolment}"))))
+@
+
+
+\newpage
+<<label=tabEventAccrual_atWeeks_q0.5, results='asis', echo=FALSE>>=
+aveVE <- 0.6
+pMissVax <- 0.05
+tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
+                                     atWeeks=seq(4, 24, by=4) * 52 / 12, lagTimePP=26, prob=0.5, na.ub=0.3)
+# convert time variables to month
+tableEventAccrual[, 1] <- tableEventAccrual[, 1] / (52 / 12)
+
+print(xtable(tableEventAccrual,
+             digits=c(0, 0, 0, 0),
+             align=rep("r", NCOL(tableEventAccrual) + 1),
+             caption=paste0("Median endpoint totals in the MITT cohort and those occurring $\\geq 26$ weeks after enrollment in the PP cohort observed by a given time since first enrollment, under average VE of ",aveVE*100,"\\%, halved during the initial 14 days ($N=",N.pla,"$ in the placebo group, $N=",N.vax,"$ in the vaccine group, 24 months of participant follow-up, ", infRate * 100, "\\% annual placebo incidence rate, 5\\% annual dropout rate, and ",pMissVax*100,"\\% probability of having missed $\\geq 1$ vaccination).")),
+      NA.string="n/a",
+      table.placement="H",
+      caption.placement="top",
+      include.rownames=FALSE,
+      include.colnames=FALSE,
+      #scalebox=0.9,
+      hline.after=NULL,
+      add.to.row=list(pos=list(0, NROW(tableEventAccrual)),
+                      command=c("\\hline \\hline  & Med Endpoints & Med Endpoints \\\\\n Months* & MITT$^{\\dagger}$ & PP$^{\\ddag}$\\\\\n \\hline",
+                                "\\hline \\hline 
+                                \\multicolumn{3}{l}{\\footnotesize * Months since first enrollment} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Median endpoints in the MITT cohort starting} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>0$ weeks after enrollment} \\\\\n 
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Median endpoints in the PP cohort starting} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>26$ weeks after enrollment}")))
+@
+
+
+\newpage
+<<label=tabEventAccrual_atWeeks_q0.8, results='asis', echo=FALSE>>=
+aveVE <- 0.6
+pMissVax <- 0.05
+prob <- 0.2
+tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
+                                     atWeeks=seq(4, 24, by=4) * 52 / 12, lagTimePP=26, prob=prob, na.ub=0.3)
+# convert time variables to month
+tableEventAccrual[, 1] <- tableEventAccrual[, 1] / (52 / 12)
+
+print(xtable(tableEventAccrual,
+             digits=c(0, 0, 0, 0),
+             align=rep("r", NCOL(tableEventAccrual) + 1),
+             caption=paste0(prob * 100, "$^{\\textrm{th}}$ percentile of the distribution of endpoint totals in the MITT cohort and those occurring $\\geq 26$ weeks after enrollment in the PP cohort observed by a given time since first enrollment, under average VE of ",aveVE*100,"\\%, halved during the initial 14 days ($N=",N.pla,"$ in the placebo group, $N=",N.vax,"$ in the vaccine group, 24 months of participant follow-up, ", infRate * 100, "\\% annual placebo incidence rate, 5\\% annual dropout rate, and ",pMissVax*100,"\\% probability of having missed $\\geq 1$ vaccination).")),
+      NA.string="n/a",
+      table.placement="H",
+      caption.placement="top",
+      include.rownames=FALSE,
+      include.colnames=FALSE,
+      #scalebox=0.9,
+      hline.after=NULL,
+      add.to.row=list(pos=list(0, NROW(tableEventAccrual)),
+                      command=c(paste0("\\hline \\hline  & ", prob * 100, "$^{\\textrm{th}}$ \\%ile Endpoints & ", prob * 100, "$^{\\textrm{th}}$ \\%ile Endpoints \\\\\n Months* & MITT$^{\\dagger}$ & PP$^{\\ddag}$\\\\\n \\hline"),
+                                paste0("\\hline \\hline 
+                                \\multicolumn{3}{l}{\\footnotesize * Months since first enrollment} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ ", prob * 100, "$^{\\textrm{th}}$ percentile of endpoints in the MITT cohort starting} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>0$ weeks after enrollment} \\\\\n 
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ ", prob * 100, "$^{\\textrm{th}}$ percentile of endpoints in the PP cohort starting} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>26$ weeks after enrollment}"))))
+@
+
 
 \newpage
 <<label=tableNvaccInfPostM6WithMonitor, results='asis', echo=FALSE>>=
