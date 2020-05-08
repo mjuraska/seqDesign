@@ -1,6 +1,6 @@
 applyStopRules <- 
     function(d, infectionTotals=NULL, testTimes=NULL, 
-             boundType = c("nonEff","highEff"), boundLabel=boundType,
+             boundType = c("nonEff","eff","highEff"), boundLabel=boundType,
              lowerVE=NULL,  upperVE=NULL, alphaLevel=0.05,
              estimand = c("cox","cuminc","combined"),
              lagTime=NULL, returnAll = FALSE, randFraction)
