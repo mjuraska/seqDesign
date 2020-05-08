@@ -12,8 +12,6 @@
 #' @param harmMonitorRange a 2-component numeric vector specifying the range of the pooled number of infections (pooled over the placebo and vaccine arm accruing infections the fastest) over which the type I error rate, specified in \code{harmMonitorAlpha}, will be spent (per vaccine arm). Note that \code{harmMonitorRange} does not specify a range for which potential-harm stopping boundaries will be computed; instead, it specifies when potential-harm monitoring will start, and the range over which \code{harmMonitorAlpha} will be spent.
 #' @param harmMonitorAlpha a numeric value (0.05 by default) specifying the overall type I error rate for potential-harm monitoring (per vaccine arm). To turn off potential-harm monitoring, set \code{harmMonitorAlpha} equal to 0.00001.
 #' @param alphaPerTest a per-test nominal/unadjusted alpha level for potential-harm monitoring. If \code{NULL}, a per-test alpha level is calculated that yields a cumulative alpha of \code{harmMonitorAlpha} at the end of \code{harmMonitorRange}.
-#' @param effEst a character string specifying the choice of VE estimand used in interim efficacy monitoring, final efficacy analysis, end-of-Stage-1 testing, and unconditional power calculations. Two options are implemented: (1) cumulative incidence-based VE (\code{"cuminc"}), the default option, defined as 1 minus the cumulative incidence ratio (treatment/control) and estimated by the transformation of the Nelson-Aalen estimator for the cumulative hazard function; and (2) hazard-based VE (\code{"cox"}), where VE is defined as 1 minus the hazard ratio (treatment/control) and estimated by the maximum partial likelihood estimator in the Cox model with treatment as a sole covariate.
-#' @param effLagTime a time point (in weeks) defining the VE estimand of the type \code{effEst}, i.e., VE(\code{effLagTime}--\code{stage1}). It is estimated based only on events occurring after \code{effLagTime} weeks and by the end of Stage 1 or earlier is any stopping boundary is hit.
 #' @param nonEffStartMethod a character string specifying the method used for determining when non-efficacy monitoring is to start. The default method of Freidlin, Korn, and Gray (2010) ("\code{FKG}") calculates the minimal pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) such that a hazard-ratio-based VE point estimate of 0\% would result in declaring non-efficacy, i.e., the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval for VE based on the asymptotic variance of the log-rank statistic equals the non-efficacy threshold specified as component \code{upperVEnonEff} in the list \code{nonEffStartParams}. If this list component is left unspecified, the argument \code{upperVEnonEff} is used as the non-efficacy threshold. The alternative method ("\code{fixed}") starts non-efficacy monitoring at a fixed pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) specified by component \code{N1} in the list \code{nonEffStartParams}.
 #' @param nonEffStartParams a list with named components specifying parameters required by \code{nonEffStartMethod} (\code{NULL} by default)
 #' @param nonEffIntervalUnit a character string specifying whether intervals between two adjacent non-efficacy interim analyses should be event-driven (default option "\code{counts}") or calendar time-driven (option "\code{time}")
@@ -155,23 +153,10 @@ monitorTrial <- function (dataFile,
                           ## be specified
                           alphaPerTest=NULL,
                           
-                          ## Argument 'estimand' is deprecated, it is being replaced by two new 
-                          ## arguments for clarity/accuracy: 'nonEffEst' and 'effEst' 
-                          ##   'nonEffEst' specifies the estimand(s) to use for non-efficacy 
-                          ##      monitoring.  It takes the same values as 'estimand' did. 
-                          ##   'effEstf' specifies the estimand to use for efficacy analyses
-                          ##      only a single estimand can be chosen
+                          ## Argument 'estimand' is no longer supported.
+                          ## specify non-eff estimands within the 'nonEffCohorts' argument list,
+                          ## and efficacy estimands within the 'effCohort' arg. list
                           estimand=c("combined", "cox", "cuminc"),
-                          
-                          ##  Specifies the estimand used for efficacy analyses, both interim and final
-                          ## 
-                          ##  If not user-specified, it will take a value based on argument 'estimand'
-                          ##  if that has been specified, and if 'estimand' isn't specified, it defaults
-                          ##  to "cuminc". 
-                          effEst = c("cuminc","cox"),
-                          
-                          ## specifies the estimand(s) to use for non-efficacy monitoring
-                          nonEffEst = c("combined","cuminc","cox"),
                           
                           ## character vector of methods to use to determine when to start non-efficacy
                           ## monitoring.  Each method requires different input information, and that
@@ -327,10 +312,6 @@ monitorTrial <- function (dataFile,
                           ## size of the lag
                           #lagTime = NULL,
 
-                          ## Allows user to specify a lag time (in weeks) for efficacy analyses.
-                          ## This is used to perform efficacy analyses that only include 
-                          ## events that occur after a specified time (measured from enrollment).
-                          effLagTime = NULL,
 
                           saveFile= NULL,
                           saveDir = NULL,
@@ -379,31 +360,9 @@ monitorTrial <- function (dataFile,
 
      # if estimand was specified, issue a deprecation message
      if ( !missing(estimand) ) { 
-        cat("Warning: Use of argument 'estimand' is deprecated.  Please use arguments \n",
-            "         'nonEffEst' and 'effEst' to specify the estimands to be used for \n",
-            "         non-efficacy monitoring and efficacy analyses respectively\n" )
-
-        estimand <- match.arg(estimand)
-
-        ## use value of 'estimand' to fill in values for nonEffEst and effEst, if they
-        ## have not been not specified
-        if ( missing(nonEffEst) ) 
-           nonEffEst <- estimand
-
-        ## We need a single estimand for efficacy analyses.  If 'combined' is specified then
-        ## then set to 'cuminc'.  Note that this has always been being done - silently - for
-        ## the final analysis (which was the only efficacy analysis)
-        if ( missing(effEst) )
-           effEst <- ifelse( estimand == "combined", "cuminc" , estimand)
-     } else {
-        # 'estimand' not specified
-        nonEffEst <- match.arg(nonEffEst)
-        effEst    <- match.arg(effEst)
-     }
-  } else {
-     ## 'estimand' no longer in argument list 
-     nonEffEst <- match.arg(nonEffEst)
-     effEst    <- match.arg(effEst)
+        cat("Warning: Use of argument 'estimand' is no longer supported.\n\n",
+            "Please specify efficacy and non-efficacy estimands separately within the\n\n",
+            "'cohort' arguments: 'nonEffCohorts' and 'effCohort'","\n\n" )
   }
 
   nonEffIntervalUnit <- match.arg(nonEffIntervalUnit)
@@ -777,8 +736,8 @@ monitorTrial <- function (dataFile,
                      analysisType = "stopTime",
                      lowerVE = altVE,
                      alphaLevel = alphaAltVE,
-                     estimand = effEst,
-                     lagTime = effLagTime,
+                     estimand = effCohort$estimand,
+                     lagTime = effCohort$lagTime,
                      time = harmRes$stopTime,
                      randFraction = null.p )
 
@@ -798,7 +757,7 @@ monitorTrial <- function (dataFile,
                   stopInfectSplit = harmRes$stopInfectSplit,
                   stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
                   stopVE_CI= VE_CI,
-                  VE_estimand = effEst,
+                  VE_estimand = effCohort$estimand,
                   stage1complete = FALSE,
                   stage2complete = FALSE,
                   altDetected = fst$altDetected  )
@@ -977,8 +936,8 @@ monitorTrial <- function (dataFile,
                         analysisType = "stopTime",
                         lowerVE = altVE,
                         alphaLevel = alphaAltVE,
-                        estimand = effEst,
-                        lagTime = effLagTime,
+                        estimand = effCohort$estimand,
+                        lagTime = effCohort$lagTime,
                         time = futRes$stopTime,
                         randFraction = null.p )
 
@@ -994,7 +953,7 @@ monitorTrial <- function (dataFile,
                   c( futRes,
                      list( stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
                            stopVE_CI= VE_CI,
-                           VE_estimand = effEst,
+                           VE_estimand = effCohort$estimand,
                            firstNonEffCnt = N1,
                            stage1complete = FALSE,
                            stage2complete = FALSE,
@@ -1073,7 +1032,7 @@ monitorTrial <- function (dataFile,
                             boundLabel = "HighEff", ## assumed by later function
                             lowerVE = highVE,
                             alphaLevel = alphaHigh,
-                            estimand=effEst,
+                            estimand = effCohort$estimand,
                             randFraction = null.p )
 
           if ( highEffRes$boundWasHit ) {
@@ -1082,8 +1041,8 @@ monitorTrial <- function (dataFile,
                          analysisType = "stopTime", 
                          lowerVE = altVE, 
                          alphaLevel = alphaAltVE, 
-                         estimand = effEst, 
-                         lagTime = effLagTime,
+                         estimand = effCohort$estimand,
+                         lagTime = effCohort$lagTime,
                          time = highEffRes$stopTime,
                          randFraction = null.p )
 
@@ -1102,7 +1061,7 @@ monitorTrial <- function (dataFile,
                      list( summNonEff = futRes$summObj,
                            stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
                            stopVE_CI= VE_CI,
-                           VE_estimand = effEst,
+                           VE_estimand = effCohort$estimand,
                            firstNonEffCnt = N1,
                            stage1complete = FALSE, 
                            stage2complete = FALSE,
@@ -1124,8 +1083,8 @@ monitorTrial <- function (dataFile,
                  stage1VE = stage1VE,
                  lowerVE = altVE,
                  alphaLevel = alphaStage1, 
-                 estimand = effEst, 
-                 lagTime = effLagTime,
+                 estimand = effCohort$estimand,
+                 lagTime = effCohort$lagTime,
                  boundLabels=c("Eff", "NonEffFinal"),
                  randFraction = null.p )
 
@@ -1142,7 +1101,7 @@ monitorTrial <- function (dataFile,
           c( fst,
              list( stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
                    stopVE_CI= VE_CI,
-                   VE_estimand = effEst,
+                   VE_estimand = effCohort$estimand,
                    firstNonEffCnt = N1,
                    summNonEff  = futRes$summObj,
                    stage1complete = TRUE,
@@ -1192,8 +1151,7 @@ monitorTrial <- function (dataFile,
                  boundLabel = "HighEff", ## assumed by later function
                  lowerVE = highVE,
                  alphaLevel = alphaHigh,
-                 #laggedMonitoring = FALSE,
-                 estimand=effEst,
+                 estimand=effCohort$estimand,
                  randFraction = null.p )
 
 
