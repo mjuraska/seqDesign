@@ -2,9 +2,8 @@ applyStopRules <-
     function(d, infectionTotals=NULL, testTimes=NULL, 
              boundType = c("nonEff","highEff"), boundLabel=boundType,
              lowerVE=NULL,  upperVE=NULL, alphaLevel=0.05,
-             laggedMonitoring=FALSE,  lagTime=NULL, laggedOnly=FALSE,
              estimand = c("cox","cuminc","combined"),
-             randFraction)
+             lagTime=NULL, returnAll = FALSE, randFraction)
 {
   
   ## This function apply the stopping rules for nonefficacy and high efficacy monitoring.
@@ -20,7 +19,7 @@ applyStopRules <-
   ## infectionTotals - a vector specifying the total number of infections at which 
   ##                   analyses should take place.  The totals (or "counts") are 
   ##                   assumed to be on the lagged scale (i.e. only lagged events
-  ##                   counted) if laggedMonitoring is TRUE
+  ##                   counted) if lagTime is specified
   ## 
   ## testTimes   - a vector specifying the calendar times at which noneff analyses
   ##                 should take place.  Either this arg. or 'infectionTotals' must
@@ -47,18 +46,17 @@ applyStopRules <-
   ##               interval for the VE(s) estimated by the estimand(s) specified
   ##               by the argument 'estimand'
   ##
-  ## laggedMonitoring - TRUE/FALSE (default is FALSE)
-  ##               Should monitoring be done on a subset of data that excludes
-  ##               the first 'lagTime' weeks of follow-up for each participant.
-  ##
   ## lagTime     - The amount of "lag-time" before lagged-monitoring begins.
-  ##               Must be specified if laggedMonitoring is TRUE
-  ##
-  ## laggedOnly - TRUE/FALSE, should *only* lagged monitoring be done            
-  ##               (not currently implemented)
+  ##               Only required if lagged monitoring is desired
   ##
   ## estimand    - a character string specifying the estimand(s) to be used in
   ##                 monitoring (can be one of "combined", "cox", and "cuminc")
+  ##
+  ## returnAll   - Should the results from all test times be returned?  If FALSE
+  ##               (the default) only results through the first test at which the
+  ##               stopCriteria are met are returned. If TRUE, then results from
+  ##               all tests are returned.  This allows for combining results
+  ##               from different cohorts outside this function.
   ##
   ## randFraction - the fraction of randomizations going to a particular 
   ##                treatment arm, when only that treatment arm and the placebo 
@@ -83,15 +81,6 @@ applyStopRules <-
         stop("The arguments 'lowerVE' and 'alphaLevel' must be specified for ",
              "high efficacy monitoring.\n")
     }
-  }
-
-  ## if laggedMonitoring is FALSE, but lagTime is non-null, issue a warning and 
-  ## set lagTime to NULL
-  if (!laggedMonitoring && !is.null(lagTime)) {
-    cat("Warning: applyStopRules has been called with laggedMonitoring set to FALSE",
-        " but a non-NULL value was provided for lagTime.\n", "Please fix this. ",
-        "We will reset lagTime to NULL and continue.\n\n", sep="")
-    lagTime <- NULL
   }
 
   ## Make sure we have only two trt groups and that they're coded as 0 and 1
@@ -125,7 +114,7 @@ applyStopRules <-
 
 
   ## If 'infectionTotals' was given, then need to get associated times
-  ## We need to do this in a way that takes into account whether laggedMonitoring
+  ## We need to do this in a way that takes into account whether lagged-monitoring
   ## was specified.  If so, the counts are assumed to be on the lagged scale.
   if ( is.null(testTimes) ) {
     if ( !is.null(infectionTotals) ) {
@@ -149,10 +138,7 @@ applyStopRules <-
 
   ## create an indicator vector of what is being evaluated in the monitoring
   ## (i.e. which estimates and which data - non-lagged/lagged )
-  indEst <- c(cir = cir,  
-              cox = cox, 
-              lagcir = cir && laggedMonitoring,
-              lagcox = cox && laggedMonitoring )
+  indEst <- c(cir = cir,  cox = cox )
 
   ## define function for testing stopping criteria based on boundType
   ## note: the as.vector() is included to strip off any names attached
@@ -177,14 +163,6 @@ applyStopRules <-
   ## (1) Create a list of censored datasets - one per element of 'testTimes'
   censDatList <- censorTrial(d, times=testTimes, timeScale="calendar")
 
-  ## (2) If laggedMonitoring == TRUE, create a 2nd list of censored datasets,
-  ##     this time left censored to 'lagTime' (based on follow-up time).  Note
-  ##     that this set is based off the right censored data in censDatList.
-  if (laggedMonitoring) {
-      censDatList_lag <- censorTrial(censDatList, times=lagTime, 
-                                          timeScale="follow-up", type="left")
-  }
-
 
   ## ***** Compute estimators needed for requested monitoring  *****
 
@@ -208,68 +186,11 @@ applyStopRules <-
                                        lowerVE=lowerVE, upperVE=upperVE )
                  )
 
-      ##  <<< This should no longer be needed. Code was added  >>>  ##
-      ##  <<< indide of cumIncRatio to handle this case        >>>  ##
-      ##  <<<------------------------------------------------- >>>  ##
-      ## If there were any test times at which we had no vaccinee infections then
-      ## our variance estimates will not be usable - they will (or should) be NA.
-      ## Set variances to NA (for cox model) and set 'stopCrit_xxx' appropriately.
-      #ZeroVacc <- ( CIRobj$nVacc == 0 )
-      #if ( any(ZeroVacc) ) {
-      #    CIRobj$stopCrit_CIR[ ZeroVacc ] <- 
-      #        ifelse(boundType=="highEff", TRUE, FALSE)
-      #}  
-
       ## subset to retain only the var.s created above
       CIRobj <- CIRobj[c("infectTotal", "infectSplit", "nPlac", "nVacc", 
                        "evalTimeCIR", "VE_CIR", "VE_CIR_loCI", "VE_CIR_upCI",
                        "varlogFR", "stopCrit_CIR") ]
 
-      ## lagged CIR, if requested
-      if (laggedMonitoring) {
-          cumInc_lagOut <- 
-              cumIncRatio( censDatList_lag, times="last", 
-                           alphaLevel = alphaLevel,
-                           randFraction = randFraction)
-
-          ## subset/reorder columns, then rename (don't need 'futime' here, it'll be
-          lagCIRobj <- 
-              transform( cumInc_lagOut,
-                  infectTotal_lag = nEvents,
-                  infectSplit_lag = paste0("Pl:Vx =", nEvents.2, ":", nEvents.1),
-                  nPlac_lag       = nEvents.2,
-                  nVacc_lag       = nEvents.1,
-                  varlogFR_lag    = varlogFR,
-                  VE_lagCIR       = VE,
-                  VE_lagCIR_loCI  = VE_loCI,
-                  VE_lagCIR_upCI  = VE_upCI,
-                  stopCrit_lagCIR = evalStopCrit( cbind(VE_loCI, VE_upCI),
-                                        lowerVE=lowerVE, upperVE=upperVE )
-                  )
-
-          ## if zero infections in either group, then set
-          ## 'stopCrit_xxx' appropriately.
-          #lagZeroVacc <- ( lagCIRobj$nVacc == 0 )
-          #lagZeroPlac <- ( lagCIRobj$nPlac == 0 )
-
-          #if ( any(lagZeroVacc | lagZeroPlac ) ) {
-              ## set CI bounds to NA (they could be anything right now)
-          #    lagCIRobj$VE_lagCIR_loCI[ lagZeroVacc | lagZeroPlac ] <- NA
-          #    lagCIRobj$VE_lagCIR_upCI[ lagZeroVacc | lagZeroPlac ] <- NA
-
-          #    lagCIRobj$stopCrit_lagCIR[ lagZeroVacc ]  <-
-          #            ifelse(boundType=="highEff", TRUE, FALSE)
-
-          #    lagCIRobj$stopCrit_lagCIR[ lagZeroPlac ] <-
-          #            ifelse(boundType=="nonEff",  TRUE, FALSE)
-          #}
-
-          ## subset to retain only the var.s created above
-          lagCIRobj <- lagCIRobj[ c("infectTotal_lag", "infectSplit_lag", 
-                           "nPlac_lag", "nVacc_lag",
-                           "VE_lagCIR", "VE_lagCIR_loCI", "VE_lagCIR_upCI",
-                           "varlogFR_lag", "stopCrit_lagCIR") ]
-      }
   }
 
 
@@ -308,64 +229,19 @@ applyStopRules <-
       ## subset to retain only the var.s created above
       CoxObj <- CoxObj[c("infectTotal", "infectSplit", "nPlac", "nVacc",
                        "VE_Cox", "VE_Cox_loCI", "VE_Cox_upCI", "stopCrit_Cox") ]
-
-      if (laggedMonitoring) {
-          coxHR_lagOut <- coxHR( censDatList_lag, alphaLevel = alphaLevel,
-                                 randFraction = randFraction)
-
-                lagCoxObj <- transform( coxHR_lagOut,
-                    infectTotal_lag = nEvents,
-                    infectSplit_lag = paste0("Pl:Vx =", nEvents.2, ":", nEvents.1),
-                    nPlac_lag       = nEvents.2,
-                    nVacc_lag       = nEvents.1,
-                    VE_lagCox       = VE,
-                    VE_lagCox_loCI  = VE_loCI,
-                    VE_lagCox_upCI  = VE_upCI,
-                    stopCrit_lagCox = evalStopCrit( cbind(VE_loCI, VE_upCI),
-                                          lowerVE=lowerVE, upperVE=upperVE )
-                 )
-
-          ## if zero infections in either group, then set
-          ## 'stopCrit_xxx' appropriately.
-          #lagZeroVacc <- ( lagCoxObj$nVacc == 0 )
-          #lagZeroPlac <- ( lagCoxObj$nPlac == 0 )
-
-          #if ( any(lagZeroVacc | lagZeroPlac ) ) {
-          #    ## set CI bounds to NA (they could be anything right now)
-          #    lagCoxObj$VE_lagCox_loCI[ lagZeroVacc | lagZeroPlac ] <- NA
-          #    lagCoxObj$VE_lagCox_upCI[ lagZeroVacc | lagZeroPlac ] <- NA
-
-          #    lagCoxObj$stopCrit_lagCox[ lagZeroVacc ]  <- 
-          #            ifelse(boundType=="highEff", TRUE, FALSE)
-
-          #    lagCoxObj$stopCrit_lagCox[ lagZeroPlac ] <- 
-          #            ifelse(boundType=="nonEff",  TRUE, FALSE)
-          #}
-
-
-          ## subset to retain only the var.s created above
-          lagCoxObj <- lagCoxObj[,c("infectTotal_lag", "infectSplit_lag", 
-                           "nPlac_lag", "nVacc_lag",
-                           "VE_lagCox", "VE_lagCox_loCI", "VE_lagCox_upCI",
-                           "stopCrit_lagCox") ]
-      }
   }
 
   ## If both cir and cox were specified, then remove columns that are in common.
   ## Do the same for lagged versions, if needed
   if (cir && cox) {
       CoxObj <- CoxObj[ !( names(CoxObj) %in% names(CIRobj) ) ]
-
-      if (laggedMonitoring) {
-          lagCoxObj <- lagCoxObj[ (! names(lagCoxObj) %in% names(lagCIRobj) )]
-      }
   }
 
 
   ##  *** now combine results across estimands  *** 
 
   ## names of output objects from each estimator
-  objNames <- c("CIRobj", "CoxObj", "lagCIRobj", "lagCoxObj")
+  objNames <- c("CIRobj", "CoxObj")
 
   ## names of the objects that were computed/created
   objsComputed <- objNames[ indEst ]
@@ -399,11 +275,17 @@ applyStopRules <-
   if ( any(stopCriteria) ) {
     boundWasHit <- TRUE
     boundHit <- boundLabel
-
-    stopIndx <- which( stopCriteria )[1]
-    summObj  <- summObj[1:stopIndx, ]
-    stopTime <- testTimes[ stopIndx ]
-    stopInfectCnt <- summObj$infectTotal[ stopIndx ] 
+    if ( !returnAll ) {
+      stopIndx <- which( stopCriteria )[1]
+      summObj  <- summObj[1:stopIndx, ]
+      stopTime <- testTimes[ stopIndx ]
+      stopInfectCnt <- summObj$infectTotal[ stopIndx ] 
+    } else {
+      ## when returnAll is TRUE
+      stopIndx <- which( stopCriteria )
+      stopTime <- testTimes[ stopIndx ]
+      stopInfectCnt <- summObj$infectTotal[ stopIndx ] 
+    }
   } else {
     boundWasHit <- FALSE
     boundHit <- NA
@@ -420,5 +302,3 @@ applyStopRules <-
             summObj       = summObj ) 
         )
 }
-
-
