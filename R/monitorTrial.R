@@ -241,9 +241,47 @@ monitorTrial <- function (dataFile,
   
                           nonEffTimes=NULL,
                           nonEffTimeUnit=c("counts","time"),
+
+                          ## Lag to use in determing the times at which nonEff testing should
+                          ## take place. Should specify the lag time after which events will
+                          ## be included in non-eff analyses.  If more than one cohort, and 
+                          ## lag time, is used in analysis, you must choose one of them to use
+                          ## here as the basis for analysis timing.  Only required if 
+                          ## nonEffTimeUnit="counts" and lagged counts will be used.
+                          nonEffTimeLag= NULL,
                           
-                          # a single numeric value (for constant increments) or a numeric vector (for variable increments)
+                          # a single numeric value (for constant increments) or a numeric vector
+                          # (for variable increments)
                           nonEffInterval,
+
+                          # if noneff monitoring is being used (which it always is), then
+                          # nonEffCohorts must provide info on each cohort being monitored.
+                          # the argument is a list of lists.  The internal lists should be
+                          # named "cohort1", "cohort2", ..., "cohort<N>".
+                          # Each cohort's list must contain a component named 'estimand' 
+                          # specifying either 'cox','cuminc', or 'combined' (for both).
+                          # Optional list components are:
+                          #   'lagTime' - indicates the lag time that controls event inclusion
+                          #               for the cohort.  If no lag time is desired, then this
+                          #               component can be excluded, set to NULL, or set to 0
+                          #   'cohortInd'- Character string naming an indicator variable to be 
+                          #                used to subset participants to the desired cohort.  
+                          #                The variable must already exist in the simTrials 
+                          #                output. This allows inclusion of e.g a "per-protocol"
+                          #                variable
+                          #
+                          # Example specification:
+                          #
+                          # nonEffCohorts <- list(
+                          #        cohort1 = list( estimand="cox", lagTime=NULL ),
+                          #        cohort2 = list( estimand="cox", lagTime=6, cohortInd="pp1" ) 
+                          #      )
+                          #
+                          ## The default set-up (below) monitors one cohort, with 'cox' estimand
+                          ## and lagTime defaulting to argument 'nonEffTimeLag'
+                          nonEffCohorts = list( 
+                              cohort1 = list(estimand="cox", lagTime=nonEffTimeLag) 
+                          ),
 
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
@@ -260,11 +298,11 @@ monitorTrial <- function (dataFile,
                           
                           ## 'laggedMonitoring' indicates whether lagged monitoring should be
                           ## used IN ADDITION TO unlagged monitoring 
-                          laggedMonitoring=FALSE,
+                          #laggedMonitoring=FALSE,
 
                           ## 'lagTime' is required if laggedMonitoring is TRUE and indicates the
                           ## size of the lag
-                          lagTime = NULL,
+                          #lagTime = NULL,
 
                           ## Allows user to specify a lag time (in weeks) for efficacy analyses.
                           ## This is used to perform efficacy analyses that only include 
@@ -427,6 +465,14 @@ monitorTrial <- function (dataFile,
   ##    p = prob. of assignment to the vaccine arm vs. the placebo arm (all 
   ##        other arms ignored for computing 'p')
   ##
+  if ( is.null(nonEffTimeLag) ) {
+    laggedMonitoring <- FALSE
+  } else {
+    if (length(nonEffTimeLag)!=1 || !is.numeric(nonEffTimeLag))
+      stop("Argument 'nonEffTimeLag' must either be NULL or a numeric vector of length 1")
+    laggedMonitoring <- TRUE
+  }
+
   if (nonEffStartMethod %in% c("?","old") && laggedMonitoring) 
     stop("\n","Usage of argument of laggedMonitoring is no longer compatible ",
          "with nonEffStartMethods '?' and 'old'.\n","Lagged monitoring is now ",
@@ -676,7 +722,7 @@ monitorTrial <- function (dataFile,
       ## be when laggedMonitoring was specified
       if ( !exists("N1") && laggedMonitoring ) {
         N1 <- getFirstNonEffCnt(datI.j, minCnt=N1.lag, 
-                                lagTimes=lagTime, lagMinCnts=N1.lag)
+                                lagTimes=nonEffTimeLag, lagMinCnts=N1.lag)
       }
 
       ## Ensure we have harm bounds up to 'N1', if not, regenerate them
@@ -743,7 +789,7 @@ monitorTrial <- function (dataFile,
       ## --------------------------------
 
       if ( isTRUE( laggedMonitoring ) ) {
-        datI.j.lag <- censorTrial(datI.j, times=lagTime, timeScale="follow-up", type="left")
+        datI.j.lag <- censorTrial(datI.j, times=nonEffTimeLag, timeScale="follow-up", type="left")
         nInfec.lagged <- sum( datI.j.lag$event == 1 )
       }
 
@@ -785,12 +831,14 @@ monitorTrial <- function (dataFile,
               }
 
               ## Convert counts into times.  
-              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, lagTime=lagTime )
+              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, 
+                                   lagTime=nonEffTimeLag )
             } else {
                 ## User specified a time-sequence for monitoring. Figure out when the first 
                 ## time and last times will be, then create the sequence
                 firstLastnonEffTimes <- 
-                    getInfectionTimes(datI.j, cnts=c(N1.lag, nInfec_nonEff), lagTime=lagTime)
+                    getInfectionTimes(datI.j, cnts=c(N1.lag, nInfec_nonEff), 
+                                      lagTime=nonEffTimeLag )
 
                 if (length(nonEffInterval)==1){
                   nonEffTimes.ij <- 
@@ -811,24 +859,84 @@ monitorTrial <- function (dataFile,
             if (nonEffTimeUnit == "time")  {
               nonEffTimes.ij <- nonEffTimes
             } else {
-              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, lagTime=lagTime )
+              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, 
+                                   lagTime=nonEffTimeLag )
             }
           }
 
-          ## run non-eff 
-          futRes <- 
+          ##  ------- run non-eff ---------
+
+          ## We need to loop over the defined cohorts, then concatenate results across them
+          nCohorts <- length( nonEffCohorts )
+          cohortFutRes <- vector( "list", nCohorts )
+          
+          for(coh.idx in 1:nCohorts) {
+
+            # extract info on cohort
+            est <- nonEffCohorts[[ coh.idx ]]$estimand
+            lag <- nonEffCohorts[[ coh.idx ]]$lagTime
+            ind <- nonEffCohorts[[ coh.idx ]]$cohortInd
+
+            ## if cohortInd is specified, use it to subset the data
+            if (!is.null( ind ) ) {
+              cohI.j <- datI.j[ datI.j[[ind]] == 1, ]
+            } else {
+              cohI.j <- datI.j
+            }
+
+            cohortFutRes[[ coh.idx ]] <- 
               applyStopRules (
-                  datI.j,
+                  cohI.j,
                   testTimes = nonEffTimes.ij,
                   boundType = "nonEff",
                   boundLabel = "NonEffInterim", 
                   lowerVE = lowerVEnoneff,
                   upperVE = upperVEnoneff,
                   alphaLevel = alphaNoneff,
-                  laggedMonitoring = laggedMonitoring,
-                  lagTime = lagTime,
-                  estimand= nonEffEst,
+                  lagTime = lag,
+                  estimand= est,
+                  returnAll = TRUE,
                   randFraction = null.p )
+          }
+
+          ## extract the 'summObj' components
+          summObj <- lapply(cohortFutRes, function(y) y$summObj)
+          names(summObj) <- names(nonEffCohorts)
+
+          ## if all cohorts report a bound hit, then we'll need to dig in deeper
+          ## to see if they all hit at the same timepoint ever.
+          ## If they didn't all hit, then we're done here!
+          if ( all( sapply(cohortFutRes, function(y) y$boundWasHit) ) ) {
+            # extract the stopTimes from each cohort
+            stopIndxList   <- lapply( cohortFutRes, function(x) x$stopIndx )
+            ## find common values in all components 
+            commonStopIndx <- unlist( Reduce(intersect, stopIndxList) )
+
+            if ( length(commonStopIndx) > 0 ) {
+              stopIndx <- min( commonStopIndx )
+              ## time of test corresponding to stopIndx
+              stopTime <- nonEffTimes.ij[ stopIndx ]
+
+              ## subset each set of results in summObj to rows 1:stopIndx
+              summObj <- lapply(summObj, function(y) y[1:stopIndx,] )
+
+              boundWasHit <- TRUE
+              boundHit    <- "NonEffInterim"
+            } else {
+              boundWasHit <- FALSE
+              boundHit <- NA
+              stopTime <- NA
+            }
+          } else {
+            boundWasHit <- FALSE
+            boundHit <- NA
+            stopTime <- NA
+          }
+          futRes <- list( boundWasHit = boundWasHit,
+                          boundHit    = boundHit,
+                          boundType   = "NonEffInterim",
+                          stopTime    = stopTime,
+                          summObj     = summObj)
 
           ## if noneff hit, then store results and go to next arm
           ## (note: output will be a list because 'futRes' is a list
@@ -864,7 +972,6 @@ monitorTrial <- function (dataFile,
               next
           } 
 
-
           ## 3. if nonEff NOT hit, then move on to high-eff monitoring
           ##    We first do *only* at the stage1 times (i.e. same times as for
           ##    nonEff monitoring ), but using all data  
@@ -875,7 +982,7 @@ monitorTrial <- function (dataFile,
                             boundLabel = "HighEff", ## assumed by later function
                             lowerVE = highVE,
                             alphaLevel = alphaHigh,
-                            laggedMonitoring = FALSE,
+                            #laggedMonitoring = FALSE,
                             estimand=effEst,
                             randFraction = null.p )
 
@@ -971,7 +1078,7 @@ monitorTrial <- function (dataFile,
                  boundLabel = "HighEff", ## assumed by later function
                  lowerVE = highVE,
                  alphaLevel = alphaHigh,
-                 laggedMonitoring = FALSE,
+                 #laggedMonitoring = FALSE,
                  estimand=effEst,
                  randFraction = null.p )
 
