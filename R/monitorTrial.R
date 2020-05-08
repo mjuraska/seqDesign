@@ -289,6 +289,30 @@ monitorTrial <- function (dataFile,
                               cohort1 = list(estimand="cox", lagTime=nonEffTimeLag) 
                           ),
 
+
+                          # timeLag = lag to use in converting 'times' counts into time
+                          #   (not needed if timeUnit = "time" or if no time lag is used) 
+                          # 
+                          # totalAlpha = total (two-sided) alpha for efficacy testing
+                          # totalEvents = number of events expected (or planned for) at the 
+                          #    last analysis time. Needed to convert to 'information time'
+                          #    for use of spending function approach
+                          #
+                          #
+                          # NOT ALL IMPLEMENTED YET
+                          # 
+                          # Minimum required:
+                          #   times, timeUnit, estimand, lagTime, totalAlpha, nullVE,
+                          #   totalEvents
+                          # effCohort = list( times, timeUnit, timeLag, timeCohortInd,
+                          #                   estimand, lagTime, cohortInd,
+                          #                   totalAlpha, nullVE, totalEvents,
+                          #                   spendingFunction),
+                          effCohort = list( times=c(52,77,103), timeUnit="counts", timeLag=2,
+                                            nullVE = 0.2, totalAlpha=0.05, totalEvents=103,
+                                            estimand="cox", lagTime=2,
+                                            nominalAlphas=c(0.0030, 0.0183, 0.0440) ),
+
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
                           lowerVEnoneff=NULL,
@@ -655,7 +679,7 @@ monitorTrial <- function (dataFile,
          datIall.j <- datIall[datIall$trt %in% c(0,j), ] 
          datIall.j$trt <- as.integer(datIall.j$trt > 0 )
       }
-      
+
 
       ## 1. do harm monitoring for j-th treatment arm vs. placebo
 
@@ -814,6 +838,7 @@ monitorTrial <- function (dataFile,
 
           ## create an empty object futRes needed later to make code work
           futRes <- list()
+          effRes <- list()
 
           ## Set 'N1' to NA ??  Need to think about it
           ## N1 <- NA
@@ -905,44 +930,50 @@ monitorTrial <- function (dataFile,
                   randFraction = null.p )
           }
 
-          ## extract the 'summObj' components
-          summObj <- lapply(cohortFutRes, function(y) y$summObj)
-          names(summObj) <- names(nonEffCohorts)
+          if (nCohorts > 1) {
+            ## extract the 'summObj' components
+            summObj <- lapply(cohortFutRes, function(y) y$summObj)
+            names(summObj) <- names(nonEffCohorts)
 
-          ## if all cohorts report a bound hit, then we'll need to dig in deeper
-          ## to see if they all hit at the same timepoint ever.
-          ## If they didn't all hit, then we're done here!
-          if ( all( sapply(cohortFutRes, function(y) y$boundWasHit) ) ) {
-            # extract the stopTimes from each cohort
-            stopIndxList   <- lapply( cohortFutRes, function(x) x$stopIndx )
-            ## find common values in all components 
-            commonStopIndx <- unlist( Reduce(intersect, stopIndxList) )
+            ## if all cohorts report a bound hit, then we'll need to dig in deeper
+            ## to see if they all hit at the same timepoint ever.
+            ## If they didn't all hit, then we're done here!
+            if ( all( sapply(cohortFutRes, function(y) y$boundWasHit) ) ) {
+              # extract the stopTimes from each cohort
+              stopIndxList   <- lapply( cohortFutRes, function(x) x$stopIndx )
+              ## find common values in all components 
+              commonStopIndx <- unlist( Reduce(intersect, stopIndxList) )
 
-            if ( length(commonStopIndx) > 0 ) {
-              stopIndx <- min( commonStopIndx )
-              ## time of test corresponding to stopIndx
-              stopTime <- nonEffTimes.ij[ stopIndx ]
+              if ( length(commonStopIndx) > 0 ) {
+                stopIndx <- min( commonStopIndx )
+                ## time of test corresponding to stopIndx
+                stopTime <- nonEffTimes.ij[ stopIndx ]
 
-              ## subset each set of results in summObj to rows 1:stopIndx
-              summObj <- lapply(summObj, function(y) y[1:stopIndx,] )
+                ## subset each set of results in summObj to rows 1:stopIndx
+                summObj <- lapply(summObj, function(y) y[1:stopIndx,] )
 
-              boundWasHit <- TRUE
-              boundHit    <- "NonEffInterim"
+                boundWasHit <- TRUE
+                boundHit    <- "NonEffInterim"
+              } else {
+                boundWasHit <- FALSE
+                boundHit <- NA
+                stopTime <- NA
+              }
             } else {
               boundWasHit <- FALSE
               boundHit <- NA
               stopTime <- NA
             }
-          } else {
-            boundWasHit <- FALSE
-            boundHit <- NA
-            stopTime <- NA
+            futRes <- list( boundWasHit = boundWasHit,
+                            boundHit    = boundHit,
+                            boundType   = "NonEffInterim",
+                            stopTime    = stopTime,
+                            summObj     = summObj)
+          } else { 
+            ## just one cohort, so set futRes to it
+            futRes <- cohortFutRes[[1]][ c("boundWasHit", "boundHit", 
+                          "boundType", "stopTime", "summObj") ]
           }
-          futRes <- list( boundWasHit = boundWasHit,
-                          boundHit    = boundHit,
-                          boundType   = "NonEffInterim",
-                          stopTime    = stopTime,
-                          summObj     = summObj)
 
           ## if noneff hit, then store results and go to next arm
           ## (note: output will be a list because 'futRes' is a list
@@ -978,6 +1009,67 @@ monitorTrial <- function (dataFile,
               next
           } 
 
+
+          ## Insert efficacy analyses here.  We'll need to rework later to
+          ## allow it to be executed earlier, so parts of it can be included
+          ## if some test are done prior to stopping for harm or non-eff
+          ## There's no chance that we would have stopped for efficacy
+          ## but instead ended up stopping for harm or non-eff, the two
+          ## results are two disparate
+
+          #effCohort = list( times=c(52,77,103), timeUnit="counts", timeLag=2,
+          #                  nullVE = 0.2, totalAlpha=0.05, totalEvents=103,
+          #                  estimand="cox", lagTime=2,
+          #                  nominalAlphas=c(0.0030, 0.0183, 0.0440) ),
+
+
+          ## Process to derive 'effTimes.ij', etc. 
+          if (effCohort$timeUnit == "time") {
+              effTimes.ij <- effCohort$times
+          } else {
+              effTimes.ij <- getInfectionTimes(datI.j, cnts=effCohort$times, 
+                                               lagTime=effCohort$timeLag )
+          }
+
+          if (is.null(effCohort$nominalAlphas) ) {
+            ## get the bounds using package ldbounds, function bounds()
+            bounds <- ldbounds::bounds(t= effTimes_info, iuse= 5, 
+                                       asf= effCohort$spendingFunction,
+                                       alpha = effAlpha/2 )
+
+            ## back-calculate to get the (nominal) test-specific alphas from the 
+          } else {
+            nominalAlphas <- effCohort$nominalAlphas
+          }
+     
+          effResList <- vector("list", length=length(effTimes.ij) )
+          for( idx in 1:length(effTimes.ij) ) {
+            effResList[[idx]] <- 
+                applyStopRules(
+                    datIall.j,
+                    testTimes = effTimes.ij[idx],
+                    boundType = "eff",
+                    boundLabel = "eff", 
+                    lowerVE = effCohort$nullVE,
+                    alphaLevel = nominalAlphas[idx],
+                    estimand= effCohort$estimand,
+                    randFraction = null.p )
+          }
+
+          ## create single set of results for eff
+          bwh <- sapply(effResList, function(y) y$boundWasHit)
+          if ( any(bwh) ) {
+             boundWasHit <- TRUE
+          } else { 
+             boundWasHit <- FALSE
+          }
+          effRes <- list(
+                      boundWasHit = boundWasHit,
+                      boundHit = ifelse(boundWasHit, "eff", NA),
+                      boundType = "eff",
+                      stage1summ = summObj )
+
+
           ## 3. if nonEff NOT hit, then move on to high-eff monitoring
           ##    We first do *only* at the stage1 times (i.e. same times as for
           ##    nonEff monitoring ), but using all data  
@@ -988,7 +1080,6 @@ monitorTrial <- function (dataFile,
                             boundLabel = "HighEff", ## assumed by later function
                             lowerVE = highVE,
                             alphaLevel = alphaHigh,
-                            #laggedMonitoring = FALSE,
                             estimand=effEst,
                             randFraction = null.p )
 
@@ -1030,6 +1121,8 @@ monitorTrial <- function (dataFile,
 
 ##-----------------------------------------------------------------------
 
+  ## --- skip this for now ---
+  if (FALSE) {
       ## Reached the end of stage 1 w/o hitting any boundaries (yee-ha!)
       ## celebrate by doing 'end-of-stage-1' dance 
       fst <- finalStage1Test(
@@ -1067,6 +1160,28 @@ monitorTrial <- function (dataFile,
           out[[i]][[j]] <- finalStg1List
           next
       }
+
+  } 
+  ## --- End of skipping for now ---
+
+
+  ## -- Temp replacement for skipped code --
+      finalStg1List <- 
+          c( effRes,
+             altDetected = effRes$boundWasHit,
+             list( 
+                  # stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
+                  # stopVE_CI= VE_CI,
+                  # VE_estimand = effEst,
+                   firstNonEffCnt = N1,
+                   summNonEff  = futRes$summObj,
+                   stage1complete = TRUE,
+                   stage2complete = FALSE ) )
+
+
+  ## -- End temp replacement for skipped code --
+
+
 
       ## 5.  If no stage1 highEff, and we "passed" the end-of-stg1 analysis, then do
       ##    the stage2 highEff analysis

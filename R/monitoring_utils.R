@@ -918,4 +918,3 @@ censorTrial <- function(d, times, arms=NULL, timeScale=c("calendar","follow-up")
   }
 }
 
-
