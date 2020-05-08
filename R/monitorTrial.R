@@ -1268,9 +1268,14 @@ monitorTrial <- function (dataFile,
               "You have not specified the argument 'saveFile' and a default\n",
               "filename cannot be constructed when argument 'dataFile' is ",
               "a list.\n\n", immediate.=TRUE)
+
+        ## used in specifying saveFile name
+        neEst <- ifelse( !is.null(nonEffCohorts[[1]]$estimand), 
+                         paste0("_", nonEffCohorts[[1]]$estimand), "")
+
         saveFile <- paste0("monitorTrial", 
                            substr(dataFile, 9, nchar(dataFile)-6), 
-                           "_", nonEffEst, ".RData")
+                           neEst, ".RData")
     }
     save(out, file = file.path(saveDir, saveFile) )
     if (verbose) { 
