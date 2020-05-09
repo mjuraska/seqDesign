@@ -163,6 +163,12 @@ applyStopRules <-
   ## (1) Create a list of censored datasets - one per element of 'testTimes'
   censDatList <- censorTrial(d, times=testTimes, timeScale="calendar")
 
+  ## Censor data to apply lagTime, if non-null and and non-zero
+  if ( !is.null(lagTime) && length(lagTime)==1 && lagTime>0.001) {
+      censDatList <- censorTrial(censDatList, times=lagTime,
+                                 timeScale="follow-up", type="left")
+  }
+
 
   ## ***** Compute estimators needed for requested monitoring  *****
 
