@@ -999,7 +999,7 @@ monitorTrial <- function (dataFile,
                 applyStopRules(
                     datIall.j,
                     testTimes = effTimes.ij,
-                    boundType = "Eff",
+                    boundType = "eff",
                     boundLabel = "Eff", 
                     lowerVE = effCohort$nullVE,
                     alphaLevel = nominalAlphas,
