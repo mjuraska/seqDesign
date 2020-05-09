@@ -1051,7 +1051,7 @@ monitorTrial <- function (dataFile,
                            substr(dataFile, 9, nchar(dataFile)-6), 
                            "_", nonEffEst, ".RData")
     }
-    save(out, file = file.path(saveDir, saveFile) )
+    save(out, file = file.path(saveDir, saveFile), compress="xz" )
     if (verbose) { 
         cat("Output saved in:\n", file.path(saveDir, saveFile), "\n\n") 
     }
