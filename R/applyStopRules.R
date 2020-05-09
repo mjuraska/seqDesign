@@ -265,8 +265,14 @@ applyStopRules <-
   cbind_call <- paste0("cbind(", paste(objsComputed, collapse=","), ")")
   summObj <- eval( parse( text = cbind_call ) )
 
-  ## add 'test' and 'testTimes' onto the data.frame
-  summObj <- cbind( test = 1:nrow(summObj), testTimes = testTimes, summObj)
+  ## add 'test', 'testTimes' and 'alphaLevel' onto the data.frame
+  if (is.null(lagTime)) 
+    lagTime <- 0 
+  summObj <- cbind( test = 1:nrow(summObj), testTimes = testTimes, lagTime=lagTime,
+                    alphaLvl=alphaLevel, summObj)
+
+  ## drop the row names that summObj picked up somehwere along the way
+  rownames(summObj) <- NULL
 
 
   ##  ***** determine if stopping criteria were met at any timepoint  *****
@@ -295,6 +301,7 @@ applyStopRules <-
   } else {
     boundWasHit <- FALSE
     boundHit <- NA
+    stopIndx <- NA
     stopTime <- NA
     stopInfectCnt <- NA
   }
@@ -303,6 +310,7 @@ applyStopRules <-
       list( boundWasHit   = boundWasHit,
             boundHit      = boundHit,
             boundType     = boundType, 
+            stopIndx      = stopIndx,
             stopTime      = stopTime, 
             stopInfectCnt = stopInfectCnt,
             summObj       = summObj ) 
