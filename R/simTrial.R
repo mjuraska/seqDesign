@@ -390,7 +390,7 @@ trialObj <- list( trialData = trialList,
                    paste( round(aveVE,2), collapse="_"),
                    "_infRate=", format(infecRate, digits=3, nsmall=3),".RData" )
 
-    save(trialObj, file=file.path(saveDir, saveFile))
+    save(trialObj, file=file.path(saveDir, saveFile), compress="xz")
 
     if (verbose){ 
         cat("Output saved in:\n", file.path(saveDir, saveFile), "\n\n") 
