@@ -995,32 +995,17 @@ monitorTrial <- function (dataFile,
             nominalAlphas <- effCohort$nominalAlphas
           }
      
-          effResList <- vector("list", length=length(effTimes.ij) )
-          for( idx in 1:length(effTimes.ij) ) {
-            effResList[[idx]] <- 
+          effRes <- 
                 applyStopRules(
                     datIall.j,
-                    testTimes = effTimes.ij[idx],
+                    testTimes = effTimes.ij,
                     boundType = "eff",
                     boundLabel = "eff", 
                     lowerVE = effCohort$nullVE,
-                    alphaLevel = nominalAlphas[idx],
+                    alphaLevel = nominalAlphas,
                     estimand= effCohort$estimand,
+                    lagTime = effCohort$lagTime,
                     randFraction = null.p )
-          }
-
-          ## create single set of results for eff
-          bwh <- sapply(effResList, function(y) y$boundWasHit)
-          if ( any(bwh) ) {
-             boundWasHit <- TRUE
-          } else { 
-             boundWasHit <- FALSE
-          }
-          effRes <- list(
-                      boundWasHit = boundWasHit,
-                      boundHit = ifelse(boundWasHit, "eff", NA),
-                      boundType = "eff",
-                      stage1summ = summObj )
 
 
           ## 3. if nonEff NOT hit, then move on to high-eff monitoring
@@ -1120,7 +1105,8 @@ monitorTrial <- function (dataFile,
 
   ## -- Temp replacement for skipped code --
       finalStg1List <- 
-          c( effRes,
+          c( effRes[ c("boundWasHit", "boundHit", "boundType", 
+                       "stopIndx", "stopTime") ] ,
              altDetected = effRes$boundWasHit,
              list( 
                   # stopVE = ifelse(VEcir, fest$VE_CIR, fest$VE_Cox),
@@ -1128,6 +1114,7 @@ monitorTrial <- function (dataFile,
                   # VE_estimand = effEst,
                    firstNonEffCnt = N1,
                    summNonEff  = futRes$summObj,
+                   summEff = effRes$summObj,
                    stage1complete = TRUE,
                    stage2complete = FALSE ) )
 
@@ -1171,7 +1158,7 @@ monitorTrial <- function (dataFile,
 
           ## Note: 'altDetected' result is included in 'finalStg1List'
           out[[i]][[j]] <- c( finalStg1List, 
-                              list( summNonEff = futRes$summObj ),
+                              #list( summNonEff = futRes$summObj ),
                               stg2HE ) 
       } else {
           ## Stage 2 completed without hitting high-efficacy
@@ -1179,7 +1166,7 @@ monitorTrial <- function (dataFile,
           finalStg1List$stopTime       <- max( datIall.j$exit)
           out[[i]][[j]] <- c( finalStg1List,
                               list( 
-                                summNonEff  = futRes$summObj,
+                                #summNonEff  = futRes$summObj,
                                 stg2highEff = stg2highEff$summObj ) )
       }
     }
