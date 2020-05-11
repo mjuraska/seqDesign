@@ -207,7 +207,8 @@ censTrial <- function(dataFile,
         saveFile <- paste0("trialDataCens", 
                            substr(monitorFile, 13, nchar(monitorFile)) ) 
     }
-    save(trialListCensor, file = file.path(saveDir, saveFile), compress="xz" )
+    #save(trialListCensor, file = file.path(saveDir, saveFile), compress="xz" )
+    save(trialListCensor, file = file.path(saveDir, saveFile) )
 
     if (verbose) { 
         cat("Trial data with correct censoring saved in:\n", 
@@ -458,7 +459,8 @@ rankTrial <- function(censFile,
   
   if (!is.null(saveDir)){
     saveFile <- paste0("rankSelectPwr",substr(censFile, 14, nchar(censFile)))
-    save(out, file = file.path(saveDir, saveFile), compress="xz" )
+    #save(out, file = file.path(saveDir, saveFile), compress="xz" )
+    save(out, file = file.path(saveDir, saveFile) )
     if (verbose){ cat("Output saved in:\n", file.path(saveDir, saveFile), "\n\n") }
   } else {
     return(out)
@@ -753,7 +755,8 @@ VEpowerPP <- function( dataList,
   }
   if (!is.null(saveDir)){
     saveFile <- ifelse(is.null(outName), "VEpwPP.RData", outName)
-    save(pwList, file=file.path(saveDir, saveFile), compress="xz")
+    #save(pwList, file=file.path(saveDir, saveFile), compress="xz")
+    save(pwList, file=file.path(saveDir, saveFile))
     if (verbose){ cat("Output saved in:\n", file.path(saveDir, saveFile), "\n\n") }
   } else {
     return(pwList)
