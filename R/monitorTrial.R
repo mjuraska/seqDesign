@@ -293,6 +293,15 @@ monitorTrial <- function (dataFile,
                           #        asf("HSD", phi=x) creates an ASF from the Hwang-Shih-DeCani
                           #            Family with parameter phi set to 'x'.
                           #
+                          # More optional components are:
+                          #   'lagTime' - indicates the lag time that controls event inclusion
+                          #               for the cohort.  If no lag time is desired, then this
+                          #               component can be excluded, set to NULL, or set to 0
+                          #   'cohortInd'- Character string naming an indicator variable to be 
+                          #                used to subset participants to the desired cohort.  
+                          #                The variable must already exist in the simTrials 
+                          #                output. This allows inclusion of e.g a "per-protocol"
+                          #                variable
                           # NOT ALL IMPLEMENTED YET
                           # 
                           # Minimum required:
@@ -303,9 +312,10 @@ monitorTrial <- function (dataFile,
                           #                   totalAlpha, nullVE, totalEvents,
                           #                   spendingFunction),
                           effCohort = list( times=c(52,77,103), timeUnit="counts", timeLag=2,
-                                            nullVE = 0.2, estimand="cox", lagTime=2,
-                                            totalAlpha=0.05, totalEvents=103,
+                                            nullVE = 0.2, 
+                                            estimand="cox", lagTime=2, cohortInd="pp1",
                                             nominalAlphas=c(0.0030, 0.0183, 0.0440) ),
+                                            #totalAlpha=0.05, totalEvents=103),
 
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
@@ -758,6 +768,9 @@ monitorTrial <- function (dataFile,
       ## if there is indication of "harm" then need to create store output
       ## object then move to next trial 
       if ( harmRes$isHarm ) {
+          if ( !is.null( effCohort$cohortInd ) ) {
+            datI.j <- datI.j[ datI.j[[ effCohort$cohortInd ]] == 1, ]
+          }
           fst <- finalStage1Test(
                      datI.j,
                      analysisType = "stopTime",
@@ -957,6 +970,9 @@ monitorTrial <- function (dataFile,
           ## if noneff hit, then store results and go to next arm
           ## (note: output will be a list because 'futRes' is a list
           if ( futRes$boundWasHit ) {
+            if ( !is.null( effCohort$cohortInd ) ) {
+              datI.j <- datI.j[ datI.j[[ effCohort$cohortInd ]] == 1, ]
+            }
 
              fst <- finalStage1Test(
                         datI.j,
@@ -1020,10 +1036,14 @@ monitorTrial <- function (dataFile,
           } else {
             nominalAlphas <- effCohort$nominalAlphas
           }
+
+          if ( !is.null( effCohort$cohortInd ) ) {
+            datI.j <- datI.j[ datI.j[[ effCohort$cohortInd ]] == 1, ]
+          }
      
           effRes <- 
                 applyStopRules(
-                    datIall.j,
+                    datI.j,
                     testTimes = effTimes.ij,
                     boundType = "eff",
                     boundLabel = "Eff", 
@@ -1048,12 +1068,13 @@ monitorTrial <- function (dataFile,
                             randFraction = null.p )
 
           if ( highEffRes$boundWasHit ) {
+            if ( !is.null( effCohort$cohortInd ) ) {
+              datI.j <- datI.j[ datI.j[[ effCohort$cohortInd ]] == 1, ]
+            }
               fst <- finalStage1Test(
                          datI.j, 
                          analysisType = "stopTime", 
                          lowerVE = altVE, 
-                         alphaLevel = alphaAltVE, 
-                         estimand = effCohort$estimand,
                          lagTime = effCohort$lagTime,
                          time = highEffRes$stopTime,
                          randFraction = null.p )
