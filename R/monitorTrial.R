@@ -271,11 +271,27 @@ monitorTrial <- function (dataFile,
                           # timeLag = lag to use in converting 'times' counts into time
                           #   (not needed if timeUnit = "time" or if no time lag is used) 
                           # 
-                          # totalAlpha = total (two-sided) alpha for efficacy testing
-                          # totalEvents = number of events expected (or planned for) at the 
-                          #    last analysis time. Needed to convert to 'information time'
-                          #    for use of spending function approach
-                          #
+                          # -- These args are only needed if using sequential monitoring bounds
+                          # + totalAlpha  = total (two-sided) alpha for efficacy testing
+                          # + totalEvents = number of events expected (or planned for) at the 
+                          #      last analysis time. Needed to convert to 'information time'
+                          #      for use of spending function approach
+                          # + spendingFunction = Tells which kind of bound to create
+                          #      Specification is either: (1) the text string "OBF", indicating
+                          #      use of O'Brien-Fleming bounds, or (2) an alpha spending function.
+                          #      The alpha spending function (ASF) 'f' must satisfy the 
+                          #      following conditions:
+                          #        (a) takes a single argument with values in [0,1], 
+                          #        (b) returns values in [0,1]
+                          #        (c) must be strictly increasing 
+                          #        (d) f(0)=0 and f(1)=1
+                          #      We provide a function asf() which allows creation of such
+                          #      functions for some common families of bounds.
+                          #        asf("Pocock") creates a pocock ASF, 
+                          #        asf("power", phi=x) creates an ASF from the power family
+                          #            with parameter phi set to 'x'.
+                          #        asf("HSD", phi=x) creates an ASF from the Hwang-Shih-DeCani
+                          #            Family with parameter phi set to 'x'.
                           #
                           # NOT ALL IMPLEMENTED YET
                           # 
@@ -287,8 +303,8 @@ monitorTrial <- function (dataFile,
                           #                   totalAlpha, nullVE, totalEvents,
                           #                   spendingFunction),
                           effCohort = list( times=c(52,77,103), timeUnit="counts", timeLag=2,
-                                            nullVE = 0.2, totalAlpha=0.05, totalEvents=103,
-                                            estimand="cox", lagTime=2,
+                                            nullVE = 0.2, estimand="cox", lagTime=2,
+                                            totalAlpha=0.05, totalEvents=103,
                                             nominalAlphas=c(0.0030, 0.0183, 0.0440) ),
 
                           ## lowerVEnoneff is not required.  Specify only if you want this
@@ -643,7 +659,7 @@ monitorTrial <- function (dataFile,
 
       ## if we don't have a constant value of N1 (across trials), then
       ## remove the existing value of N1
-      if ( !constant.N1 && exists("N1") 
+      if ( !constant.N1 && exists("N1") )
         rm("N1")
 
       ## subset events in relevant arms: j-th active trt and placebo(trt=0)
