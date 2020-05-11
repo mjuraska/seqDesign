@@ -599,6 +599,11 @@ monitorTrial <- function (dataFile,
                              timeScale="follow-up")
   }
 
+  ## Make note of whether 'N1' exists (it will for certain types of non-eff. monitoring
+  ## timing).  If it does, then N1 will remain constant throughout the trial.
+  ## Otherwise we'll need to reset it at the beginning of each new trial/arm
+  constant.N1 <- ifelse( exists("N1"), TRUE, FALSE )
+
   ## Start looping over trials
   for (i in 1:nTrials ) {
 
@@ -635,6 +640,11 @@ monitorTrial <- function (dataFile,
 
 
       ## 1. do harm monitoring for j-th treatment arm vs. placebo
+
+      ## if we don't have a constant value of N1 (across trials), then
+      ## remove the existing value of N1
+      if ( !constant.N1 ) 
+        rm("N1")
 
       ## subset events in relevant arms: j-th active trt and placebo(trt=0)
       E.j <- eventDF[eventDF$trt %in% c(0,j), ]
@@ -710,7 +720,7 @@ monitorTrial <- function (dataFile,
 
       ## Ensure we have harm bounds up to 'N1', if not, regenerate them
       if (N1 > max(harmBounds$N)) {
-          maxCnt <- 2 * N1
+          maxCnt <- round(1.5 * N1 )
 
           ## get harm bounds 
           harmBounds <- getHarmBound(
