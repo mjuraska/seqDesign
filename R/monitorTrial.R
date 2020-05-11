@@ -643,7 +643,7 @@ monitorTrial <- function (dataFile,
 
       ## if we don't have a constant value of N1 (across trials), then
       ## remove the existing value of N1
-      if ( !constant.N1 ) 
+      if ( !constant.N1 && exists("N1") 
         rm("N1")
 
       ## subset events in relevant arms: j-th active trt and placebo(trt=0)
