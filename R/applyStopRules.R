@@ -268,7 +268,12 @@ applyStopRules <-
   ## add 'test', 'testTimes' and 'alphaLevel' onto the data.frame
   if (is.null(lagTime)) 
     lagTime <- 0 
-  summObj <- cbind( test = 1:nrow(summObj), testTimes = testTimes, lagTime=lagTime,
+  #summObj <- cbind( test = 1:nrow(summObj), testTimes = testTimes, lagTime=lagTime,
+  #                  alphaLvl=alphaLevel, summObj)
+  n.rows <- nrow(summObj)
+  if (length(alphaLevel)>1)
+     alphaLevel <- alphaLevel[1:n.rows] 
+  summObj <- cbind( test = 1:n.rows, testTimes = testTimes[1:n.rows], lagTime=lagTime,
                     alphaLvl=alphaLevel, summObj)
 
   ## drop the row names that summObj picked up somehwere along the way

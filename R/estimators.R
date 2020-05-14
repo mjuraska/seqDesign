@@ -208,17 +208,31 @@ cumIncRatio <- function( d, times="last", arms=c(1,0), alphaLevel=0.05,
     force(times)
 
     ## Apply our 'cir' function to the list of datasets 'd', and return the list
-    if ( length(alphaLevel)==1 || length(alphaLevel) != length(d) ) {
-        cirList <- lapply(d, FUN=cir, times=times, arms=arms, formula=survForm,
-                          alpha=alphaLevel, randFraction = randFraction)
-    } else { 
-        ## when alphaLevel is the same length as d (and length > 1), then do each
-        ## test at a different alpha level)
-        cirList <- mapply(FUN=cir, d.i=d, alpha=alphaLevel,
-                          MoreArgs= list( times=times, arms=arms, formula=survForm,
-                                          randFraction = randFraction), 
-                          SIMPLIFY=FALSE )
+    if ( length(alphaLevel)==1 ) {
+      cirList <- lapply(d, FUN=cir, times=times, arms=arms, formula=survForm,
+                        alpha=alphaLevel, randFraction = randFraction)
+    } else  if ( length(alphaLevel) >= length(d) ) {
+
+      if ( length(alphaLevel) > length(d) ) {        
+          ## Issue warning and use only the first "length(d)" components of alphaLevel
+          cat("NOTE: There were too many alphaLevel values provided relative to the number",
+              " of datasets\n",  "Most likely, this reflects a trial in which too few ",
+              "infections accrued so not all planned tests were triggered\n\n", sep="")
+      }
+
+      ## when alphaLevel is the same length as d (or longer) and length > 1), then 
+      ## do each test at a different alpha level)
+      cirList <- mapply(FUN=cir, d.i=d, alpha=alphaLevel[1:length(d)],
+                        MoreArgs= list( times=times, arms=arms, formula=survForm,
+                                        randFraction = randFraction), 
+                        SIMPLIFY=FALSE )
+    } else {
+      stop("A vector was provided for arg. 'alphaLevel' but it does not have values ",
+           "for each planned test.  This is not permissible.  You must either specify",
+           " a single value for alphaLevel or a vector with as many values as planned",
+           " tests.   Exiting... \n\n\n")
     }
+
 
     ## If SIMPLIFY is turned off, return object and exit
     if ( !SIMPLIFY ) 
@@ -380,17 +394,34 @@ coxHR <- function(d, arms=c(1,0), alphaLevel=0.05, randFraction = 0.5,
         }
 
         return( outObj )
-    }
+    }  ## end defn of function 'cph'
+
+
     ## Apply our 'cph' function to the list of datasets 'd', and return the list
-    if ( length(alphaLevel)==1 || length(alphaLevel) != length(d) ) {
-        cphList <- lapply(d, FUN=cph, formula=survForm, alpha=alphaLevel,
-                          randFraction = randFraction)
-    } else { 
-        ## when alphaLevel is the same length as d (and length > 1), then do each
-        ## test at a different alpha level)
-        cphList <- mapply(FUN=cph, d.i=d, alpha=alphaLevel, 
-                          MoreArgs= list(formula=survForm, randFraction = randFraction),
-                          SIMPLIFY=FALSE )
+    if ( length(alphaLevel)==1 ) {
+      cphList <- lapply(d, FUN=cph, formula=survForm, alpha=alphaLevel,
+                        randFraction = randFraction)
+
+    } else if ( length(alphaLevel) >= length(d) ) { 
+
+      if ( length(alphaLevel) > length(d) ) {        
+          ## Issue warning and use only the first "length(d)" components of alphaLevel
+          cat("NOTE: There were too many alphaLevel values provided relative to the number",
+              " of datasets\n",  "Most likely, this reflects a trial in which too few ",
+              "infections accrued so not all planned tests were triggered\n\n", sep="")
+      }
+
+      ## when alphaLevel is the same length as d (and length > 1), then do each
+      ## test at a different alpha level)
+      cphList <- mapply(FUN=cph, d.i=d, alpha=alphaLevel[1:length(d)], 
+                        MoreArgs= list(formula=survForm, randFraction = randFraction),
+                        SIMPLIFY=FALSE )
+
+    } else {
+      stop("A vector was provided for arg. 'alphaLevel' but it does not have values ",
+           "for each planned test.  This is not permissible.  You must either specify",
+           " a single value for alphaLevel or a vector with as many values as planned",
+           " tests.   Exiting... \n\n\n")
     }
 
     ## If SIMPLIFY is turned off, return object and exit
