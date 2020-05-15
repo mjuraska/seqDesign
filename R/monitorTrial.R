@@ -646,7 +646,7 @@ monitorTrial <- function (dataFile,
     eventDF <- datI[datI$event == 1, ]
     eventDF <- eventDF[order(eventDF$exit), ]
 
-    cat("Trial :", i, "  \n")
+    #cat("Trial :", i, "  \n")
 
     ## Now start comparisons - each active arm vs. placebo arm, one at a time
     for (j in 1:nTrtArms) {
