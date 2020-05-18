@@ -226,13 +226,17 @@ monitorTrial <- function (dataFile,
                           nonEffTimes=NULL,
                           nonEffTimeUnit=c("counts","time"),
 
+                          ## the 'lagTime' component here replaces the variable 'nonEffTimeLag'
+                          ## but it must be specified
+                          nonEffTimingCohort=list(lagTime=NULL, cohortInd=NULL),
+
                           ## Lag to use in determing the times at which nonEff testing should
                           ## take place. Should specify the lag time after which events will
                           ## be included in non-eff analyses.  If more than one cohort, and 
                           ## lag time, is used in analysis, you must choose one of them to use
                           ## here as the basis for analysis timing.  Only required if 
                           ## nonEffTimeUnit="counts" and lagged counts will be used.
-                          nonEffTimeLag= NULL,
+                          #nonEffTimeLag= NULL,
                           
                           # a single numeric value (for constant increments) or a numeric vector
                           # (for variable increments)
@@ -262,9 +266,9 @@ monitorTrial <- function (dataFile,
                           #      )
                           #
                           ## The default set-up (below) monitors one cohort, with 'cox' estimand
-                          ## and lagTime defaulting to argument 'nonEffTimeLag'
+                          ## and lagTime defaulting to NULL
                           nonEffCohorts = list( 
-                              cohort1 = list(estimand="cox", lagTime=nonEffTimeLag) 
+                              cohort1 = list(estimand="cox", lagTime=NULL) 
                           ),
 
 
@@ -311,7 +315,8 @@ monitorTrial <- function (dataFile,
                           #                   estimand, lagTime, cohortInd,
                           #                   totalAlpha, nullVE, totalEvents,
                           #                   spendingFunction),
-                          effCohort = list( times=c(52,77,103), timeUnit="counts", timeLag=2,
+                          effCohort = list( times=c(52,77,103), timeUnit="counts", 
+                                            timingCohort=list(lagTime=NULL, cohortInd=NULL),
                                             nullVE = 0.2, 
                                             estimand="cox", lagTime=2, cohortInd="pp1",
                                             nominalAlphas=c(0.0030, 0.0183, 0.0440) ),
@@ -474,12 +479,22 @@ monitorTrial <- function (dataFile,
   ##    p = prob. of assignment to the vaccine arm vs. the placebo arm (all 
   ##        other arms ignored for computing 'p')
   ##
-  if ( is.null(nonEffTimeLag) ) {
-    laggedMonitoring <- FALSE
-  } else {
-    if (length(nonEffTimeLag)!=1 || !is.numeric(nonEffTimeLag))
-      stop("Argument 'nonEffTimeLag' must either be NULL or a numeric vector of length 1")
-    laggedMonitoring <- TRUE
+  
+  ## Create indicators of whether either a lagTime or cohortInd has been
+  ## specified for timing of non-efficacy analyses
+  if ( nonEffTimeUnit != "times" ) {
+    if ( !is.null(nonEffTimingCohort$lagTime) &&  
+         nonEffTimingCohort$lagTime > 0 ) {
+      laggedMonitoring <- TRUE
+    } else {
+      laggedMonitoring <- FALSE
+    }
+
+    neTimeCohInd <- ifelse( !is.null(nonEffTimingCohort$cohortInd),
+                            TRUE, FALSE ) 
+
+    ## if either indicator is set (is "ne" timing diff. from Harm timing
+    neTimingDiff <- ifelse(laggedMonitoring || neTimeCohInd, TRUE, FALSE )
   }
 
   if (nonEffStartMethod %in% c("?","old") && laggedMonitoring) 
@@ -490,11 +505,11 @@ monitorTrial <- function (dataFile,
 
   if ( !is.null(nonEffTimes) && nonEffTimeUnit == "counts")  {
     nonEffCnts <- nonEffTimes
-    if (!laggedMonitoring) {
+    if ( !neTimingDiff ) {
       N1 <- nonEffCnts[1]
-      N1.lag <- N1
+      N1.ne <- N1
     } else {
-      N1.lag <- nonEffCnts[1]
+      N1.ne <- nonEffCnts[1]
     }
   }
          
@@ -530,9 +545,9 @@ monitorTrial <- function (dataFile,
             "from the argument 'upperVEnoneff' and 'alphaNoneff'\n",
             "Exiting...\n" )
  
-     N1.lag <- ceiling(qnorm(1 - alphaNE/2)^2 /( null.p*(1-null.p)*log(1-upperVE)^2 ))
-     if (!laggedMonitoring) {
-       N1 <- N1.lag
+     N1.ne <- ceiling(qnorm(1 - alphaNE/2)^2 /( null.p*(1-null.p)*log(1-upperVE)^2 ))
+     if ( !neTimingDiff ) {
+       N1 <- N1.ne
      }
 
   } else if ( nonEffStartMethod == "fixed" ) {
@@ -543,14 +558,14 @@ monitorTrial <- function (dataFile,
            "'N1' via the list argument 'nonEffStartParams'\n.",
            "e.g. nonEffStartParams <- list(N1=60).  Please fix.\n" )
 
-    N1.lag <- nonEffStartParams$N1
-    if (!laggedMonitoring) {
-      N1 <- N1.lag
+    N1.ne <- nonEffStartParams$N1
+    if (!neTimingDiff ) {
+      N1 <- N1.ne
     }
   } 
 
-  ## N1 should only exist if laggedMonitoring is FALSE, while N1.lag exists
-  ## otherwise (N1.lag also exists if N1 does).
+  ## N1 should only exist if laggedMonitoring is FALSE, while N1.ne exists
+  ## otherwise (N1.ne also exists if N1 does).
   ## Harm monitoring will end at N1 infections, so when "N1" exists, set the upper
   ## limit of 'harmMonitorRange' to N1 so boundaries will be defined based on it
   if ( exists("N1") ) {
@@ -562,10 +577,10 @@ monitorTrial <- function (dataFile,
   ## do a check on 'harmMonitorRange' to be sure it's correctly specified
   if ( length(harmMonitorRange) != 2 || is.na(harmMonitorRange[2]) ||
        is.infinite(harmMonitorRange[2]) ) {
-     if (laggedMonitoring==TRUE) {
-        stop("When laggedMonitoring is TRUE then the harmMonitoringRange must",
-             "be fully specified.\n","It should be a length 2 vector with both",
-             "values being integers.\n\n")
+     if (neTimingDiff) {
+        stop("When the non-efficacy timing cohort differs from the harm monitoring\n",
+             "cohort, then the harmMonitoringRange must be fully specified - i.e. it\n",
+             "must be length 2 vector with both values being integers.\n\n")
      } else {
         stop("When nonEffStartMethod is NOT one of 'FKG' or 'fixed', then ",
              "harmMonitoringRange must be fully specified.\n", "It should be a ",
@@ -733,15 +748,21 @@ monitorTrial <- function (dataFile,
                      nInfecAfterwk = minCnt2,
                      week2 = week2)
       }
-      ## set N1.lag for the cases for which N1 was just defined (immed. above)
-      if ( !exists("N1.lag") && exists("N1") )
-        N1.lag <- N1
+      ## set N1.ne for the cases for which N1 was just defined (immed. above)
+      if ( !exists("N1.ne") && exists("N1") )
+        N1.ne <- N1
 
       ## Now get 'N1' for the cases where we don't have it, which should only
       ## be when laggedMonitoring was specified
-      if ( !exists("N1") && laggedMonitoring ) {
-        N1 <- getFirstNonEffCnt(datI.j, minCnt=N1.lag, 
-                                lagTimes=nonEffTimeLag, lagMinCnts=N1.lag)
+      if ( !exists("N1") && neTimingDiff ) {
+        if (neTimeCohInd) {
+           nedatI.j <- datI.j[ datI.j[[nonEffTimingCohort$cohortInd]]==1, ]
+        } else {
+           nedatI.j <- datI.j
+        }
+        N1 <- getFirstNonEffCnt(
+                 nedatI.j, minCnt=N1.ne, 
+                 lagTimes=nonEffTimingCohort$lagTime, lagMinCnts=N1.ne)
       }
 
       ## Ensure we have harm bounds up to 'N1', if not, regenerate them
@@ -810,9 +831,17 @@ monitorTrial <- function (dataFile,
       ## 2. begin non-eff monitoring prep
       ## --------------------------------
 
-      if ( isTRUE( laggedMonitoring ) ) {
-        datI.j.lag <- censorTrial(datI.j, times=nonEffTimeLag, timeScale="follow-up", type="left")
-        nInfec.lagged <- sum( datI.j.lag$event == 1 )
+      if ( neTimingDiff ) {
+        if (neTimeCohInd) {
+           nedatI.j <- datI.j[ datI.j[[nonEffTimingCohort$cohortInd]]==1, ]
+        } else {
+           nedatI.j <- datI.j
+        }
+        if (laggedMonitoring) {
+          nedatI.j <- censorTrial( nedatI.j, times=nonEffTimingCohort$lagTime,
+                                   timeScale="follow-up", type="left")
+        }
+        nInfec.ne <- sum( nedatI.j$event == 1 )
       }
 
       ## determine end of stage 1 time, needed if any specified monitoring times/counts
@@ -823,24 +852,26 @@ monitorTrial <- function (dataFile,
       ## create new variable, 'nInfec_nonEff' that will contain the total number of
       ## infections under the chosen method of non-efficacy monitoring (i.e based on
       ## regular or lagged infections/events)
-      nInfec_nonEff <- ifelse(laggedMonitoring, nInfec.lagged, nInfec)
+      nInfec_nonEff <- ifelse(neTimingDiff, nInfec.ne, nInfec)
 
-      if (N1.lag > nInfec_nonEff ) {
+      ## I don't think I need to skip this situation.  The later code that deals with
+      ## test times that are not reached should be used to handle it
+      #if (N1.ne > nInfec_nonEff ) {
           ## deal with annoying case where the trial didn't have enough infec.s
           ## to reach the start point of the non-eff. interim analyses
            
           ## For now we do nothing, except skip all the interim analysis code
           ## and go directly to the finalStage1 test
-          nonEffTimes.ij <- NA
+      #    nonEffTimes.ij <- NA
 
           ## create an empty object futRes needed later to make code work
-          futRes <- list()
-          effRes <- list()
+      #    futRes <- list()
+      #    effRes <- list()
 
           ## Set 'N1' to NA ??  Need to think about it
           ## N1 <- NA
 
-      } else {  # This 'else' goes on FOREVER!
+      #} else {  # This 'else' goes on FOREVER!
           
           ## determine 'nonEffTimes' and then do non-eff monitoring
           ## Determine the times at which nonEff monitoring will occur
@@ -850,24 +881,26 @@ monitorTrial <- function (dataFile,
               ## makes sequence of counts at which analyses will be done
               if (length(nonEffInterval)==1){
                 # then a constant increment in the endpoint count is assumed
-                nonEffCnts <- seq(from = N1.lag, to = nInfec_nonEff, by = nonEffInterval)  
+                nonEffCnts <- seq(from = N1.ne, to = nInfec_nonEff, by = nonEffInterval)  
               } else {
                 # then 'nonEffInterval' is a vector of potentially variable increments
                 # specifying endpoint counts for subsequent interim looks following the
                 # initial look
-                nonEffCnts <- cumsum(c(N1.lag, nonEffInterval))
+                nonEffCnts <- cumsum(c(N1.ne, nonEffInterval))
               }
 
               ## Convert counts into times.  
-              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, 
-                                   lagTime=nonEffTimeLag )
-
-
+              if ( neTimingDiff ) {
+                ## subsetted and lagged (if required) dataset 'nedatI.j' was already created earlier
+                  nonEffTimes.ij <- getInfectionTimes(nedatI.j, cnts=nonEffCnts, lagTime=NULL )
+              } else {
+                  nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts)
+              }
             } else {
                 ## User specified a time-sequence for monitoring. Figure out when the first 
                 ## time and last times will be, then create the sequence
                 firstLastnonEffTimes <- 
-                    getInfectionTimes(datI.j, cnts=c(N1.lag, nInfec_nonEff), 
+                    getInfectionTimes(datI.j, cnts=c(N1.ne, nInfec_nonEff), 
                                       lagTime=nonEffTimeLag )
 
                 if (length(nonEffInterval)==1){
@@ -912,8 +945,13 @@ monitorTrial <- function (dataFile,
                 }
               }
             } else {
-              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, 
-                                   lagTime=nonEffTimeLag )
+
+              if ( neTimingDiff ) {
+                ## subsetted and lagged (if required) dataset 'nedatI.j' was already created earlier
+                  nonEffTimes.ij <- getInfectionTimes(nedatI.j, cnts=nonEffCnts)
+              } else {
+                  nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts)
+              }
 
               ## check if we "lost" any tests, due to the counts not being reached
               if ( length(nonEffTimes.ij) < length(nonEffCnts) )  {
@@ -1089,12 +1127,34 @@ monitorTrial <- function (dataFile,
                 }
               }
           } else {
-              effTimes.ij <- getInfectionTimes(datI.j, cnts=sort(effCohort$times),
-                                               lagTime=effCohort$timeLag )
+              ## extract info on timingCohort
+              if ( is.null( effCohort$timingCohort) )
+                 stop("Component 'timingCohort' must be specified for the efficacy analysis\n.",
+                      "It is needed to translate counts to calendar time for analyses\n")
+
+              if ( is.null(effCohort$timingCohort$lagTime) )
+                 stop("Component 'lagTime' is a required component of 'timingCohort' in the\n", 
+                      "efficacy testing specification.  Set it's value to zero if not needed\n")
+
+              if (!is.null( effCohort$timingCohort$cohortInd ) ) {
+                ## subset data using 'cohortInd' and then determine the times
+                timingI.j <- datI.j[ datI.j[[ effCohort$timingCohort$cohortInd ]] == 1, ]
+
+                effTimes.ij <- getInfectionTimes(
+                                 timingI.j, cnts=sort(effCohort$times),
+                                 lagTime= effCohort$timingCohort$lagTime )
+              } else {
+                ## cohortInd not specified, just use lagTime
+                effTimes.ij <- getInfectionTimes(
+                                 datI.j,  cnts=sort(effCohort$times),
+                                 lagTime= effCohort$timingCohort$lagTime )
+              }
 
               ## check if we "lost" any tests, due to the counts not being reached
               if ( length(effTimes.ij) < length(effCohort$times) )  {
                   nLost <- length(effCohort$times) - length(effTimes.ij) 
+                  ## if we only lost 1, or if we're using a fixed nominal alpha level
+                  ## then add a test at the end of stage 1 follow-up
                   if (nLost==1 || length(effCohort$nominalAlphas)==1 ) {
                     effTimes.ij <- c(effTimes.ij, endStg1)
                   } else {
@@ -1118,12 +1178,15 @@ monitorTrial <- function (dataFile,
           }
 
           if ( !is.null( effCohort$cohortInd ) ) {
-            datI.j <- datI.j[ datI.j[[ effCohort$cohortInd ]] == 1, ]
+            effdatI.j <- datI.j[ datI.j[[ effCohort$cohortInd ]] == 1, ]
+          } else {
+            effdatI.j <- datI.j
           }
+          
      
           effRes <- 
                 applyStopRules(
-                    datI.j,
+                    effdatI.j,
                     testTimes = effTimes.ij,
                     boundType = "eff",
                     boundLabel = "Eff", 
@@ -1148,11 +1211,8 @@ monitorTrial <- function (dataFile,
                             randFraction = null.p )
 
           if ( highEffRes$boundWasHit ) {
-            if ( !is.null( effCohort$cohortInd ) ) {
-              datI.j <- datI.j[ datI.j[[ effCohort$cohortInd ]] == 1, ]
-            }
               fst <- finalStage1Test(
-                         datI.j, 
+                         effdatI.j, 
                          analysisType = "stopTime", 
                          lowerVE = altVE, 
                          lagTime = effCohort$lagTime,
@@ -1182,7 +1242,7 @@ monitorTrial <- function (dataFile,
 
               next
           }
-      }  ## end of (N1.lag > nInfec_nonEff) if/else clause
+      #}  ## end of (N1.ne > nInfec_nonEff) if/else clause
 
 ##-----------------------------------------------------------------------
 
