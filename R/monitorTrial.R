@@ -815,6 +815,11 @@ monitorTrial <- function (dataFile,
         nInfec.lagged <- sum( datI.j.lag$event == 1 )
       }
 
+      ## determine end of stage 1 time, needed if any specified monitoring times/counts
+      ## are not attained in stage 1.
+      ## endStg1 == calendar time at which stage 1 follow-up ends
+      endStg1 <- max( datI.j$exit )
+
       ## create new variable, 'nInfec_nonEff' that will contain the total number of
       ## infections under the chosen method of non-efficacy monitoring (i.e based on
       ## regular or lagged infections/events)
@@ -856,6 +861,8 @@ monitorTrial <- function (dataFile,
               ## Convert counts into times.  
               nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, 
                                    lagTime=nonEffTimeLag )
+
+
             } else {
                 ## User specified a time-sequence for monitoring. Figure out when the first 
                 ## time and last times will be, then create the sequence
@@ -880,10 +887,49 @@ monitorTrial <- function (dataFile,
           } else {
             ## if nonEffTimes was specified
             if (nonEffTimeUnit == "time")  {
-              nonEffTimes.ij <- nonEffTimes
+              nonEffTimes.ij <- sort(nonEffTimes)
+
+              ## check if any specified times are beyond the extent of stage 1
+              if ( any(nonEffTimes.ij > endStg1) ) {
+                wTooLrg <- which( nonEffTimes.ij > endStg1 )
+
+                ## if just one is too large, then set that last time to 'endStg1'
+                if ( length(wTooLrg) == 1 ) {
+                  nonEffTimes.ij[w] <- endStg1
+
+                #} else if ( length(nominalAlphas) == 1 ) {
+                } else if ( length(alphaNoneff) == 1 ) {
+                  ## if a single alpha for all tests then set first 'too large'
+                  ## time to 'endStg1' and drop the rest
+                  nonEffTimes.ij[ w[1] ] <- endStg1
+                  nonEffTimes.ij <- nonEffTimes.ij[ 1:w[1] ]
+
+                } else {
+                  ## crash and burn
+                  stop("More than one of the specified non-efficacy test times was not reached.\n",
+                       "The code cannot adjust when multiple tests are missing, please re-run",
+                       "specifying fewer\n","non-efficacy tests and/or earlier times for them.\n\n")
+                }
+              }
             } else {
               nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts, 
                                    lagTime=nonEffTimeLag )
+
+              ## check if we "lost" any tests, due to the counts not being reached
+              if ( length(nonEffTimes.ij) < length(nonEffCnts) )  {
+                  nLost <- length(nonEffCnts) - length(nonEffTimes.ij)
+                  #if (nLost==1 || length(nominalAlphas)==1) {
+                  if (nLost==1 || length(alphaNoneff)==1) {
+                    nonEffTimes.ij <- c(nonEffTimes.ij, endStg1)
+
+                  } else {
+                    ## crash and burn
+                    stop("More than one of the specified efficacy test counts was not reached.\n",
+                         "The code cannot adjust when multiple tests are missing, please re-run",
+                         "specifying fewer\n","efficacy tests and/or lower counts for them.\n\n")
+                }
+              }
+
             }
           }
 
@@ -1017,13 +1063,47 @@ monitorTrial <- function (dataFile,
           #                  estimand="cox", lagTime=2,
           #                  nominalAlphas=c(0.0030, 0.0183, 0.0440) ),
 
-
           ## Process to derive 'effTimes.ij', etc. 
           if (effCohort$timeUnit == "time") {
-              effTimes.ij <- effCohort$times
+              effTimes.ij <- sort(effCohort$times)
+
+              ## check if any specified times are beyond the extent of stage 1
+              if ( any(effTimes.ij > endStg1) ) {
+                wTooLrg <- which( effTimes.ij > endStg1 )
+
+                ## if just one is too large, then set that last time to 'endStg1'
+                if ( length(wTooLrg) == 1 ) {
+                  effTimes.ij[w] <- endStg1 
+
+                } else if ( length(effCohort$nominalAlphas) == 1 ) {
+                  ## if a single alpha for all tests then set first 'too large'
+                  ## time to 'endStg1' and drop the rest 
+                  effTimes.ij[ w[1] ] <- endStg1 
+                  effTimes.ij <- effTimes.ij[ 1:w[1] ]
+                 
+                } else {
+                  ## crash and burn
+                  stop("More than one of the specified efficacy test times was not reached.\n",
+                       "The code cannot adjust when multiple tests are missing, please re-run",
+                       "specifying fewer\n","efficacy tests and/or earlier times for them.\n\n")
+                }
+              }
           } else {
-              effTimes.ij <- getInfectionTimes(datI.j, cnts=effCohort$times, 
+              effTimes.ij <- getInfectionTimes(datI.j, cnts=sort(effCohort$times),
                                                lagTime=effCohort$timeLag )
+
+              ## check if we "lost" any tests, due to the counts not being reached
+              if ( length(effTimes.ij) < length(effCohort$times) )  {
+                  nLost <- length(effCohort$times) - length(effTimes.ij) 
+                  if (nLost==1 || length(effCohort$nominalAlphas)==1 ) {
+                    effTimes.ij <- c(effTimes.ij, endStg1)
+                  } else {
+                    ## crash and burn
+                    stop("More than one of the specified efficacy test counts was not reached.\n",
+                         "The code cannot adjust when multiple tests are missing, please re-run",
+                         "specifying fewer\n","efficacy tests and/or lower counts for them.\n\n")
+                  }
+              } 
           }
 
           if (is.null(effCohort$nominalAlphas) ) {
