@@ -990,6 +990,10 @@ monitorTrial <- function (dataFile,
 
             }
           }
+          ## if we haven't created a customized variable "alphaNoneff.ij" above, create it now
+          ## based on specified values
+          if ( !exists("alphaNoneff.ij") )
+            alphaNoneff.ij <- alphaNoneff
 
           ##  ------- run non-eff ---------
 
@@ -1019,7 +1023,7 @@ monitorTrial <- function (dataFile,
                   boundLabel = "NonEffInterim", 
                   lowerVE = lowerVEnoneff,
                   upperVE = upperVEnoneff,
-                  alphaLevel = ifelse(exists("alphaNoneff.ij"), alphaNoneff.ij, alphaNoneff),
+                  alphaLevel = alphaNoneff.ij,
                   lagTime = lag,
                   estimand= est,
                   returnAll = ifelse(nCohorts>1, TRUE, FALSE),
@@ -1125,6 +1129,8 @@ monitorTrial <- function (dataFile,
           if ( exists("nominalAlphas.ij") )
             rm( nominalAlphas.ij )
 
+          ## if
+
           ## Process to derive 'effTimes.ij', etc. 
           if (effCohort$timeUnit == "time") {
               effTimes.ij <- sort(effCohort$times)
@@ -1138,8 +1144,6 @@ monitorTrial <- function (dataFile,
                   effTimes.ij[wTooLrg] <- endStg1 
 
                 } else if ( length(effCohort$nominalAlphas) == 1 ) {
-                  ## if a single alpha for all tests then set first 'too large'
-                  ## time to 'endStg1' and drop the rest 
                   effTimes.ij[ wTooLrg[1] ] <- endStg1 
                   effTimes.ij <- effTimes.ij[ 1:wTooLrg[1] ]
                  
@@ -1155,7 +1159,9 @@ monitorTrial <- function (dataFile,
                   ## test using 'alphaLevelNoneff' corresponding to final analysis
                   effTimes.ij[ wTooLrg[1] ] <- endStg1
                   effTimes.ij   <- effTimes.ij[ 1:wTooLrg[1] ]
-                  nominalAlphas.ij <- nominalAlphas[ c( 1:(wTooLarg[1]-1), length(nominalAlphas) ) ]
+                  nominalAlphas.ij <- 
+                    effCohort$nominalAlphas[ c( 1:(wTooLarg[1]-1), 
+                                                length(effCohort$nominalAlphas) ) ]
                 }
               }
           } else {
@@ -1201,10 +1207,17 @@ monitorTrial <- function (dataFile,
                     ## using the 'alphaLevelNoneff' value corresponding to final analysis
                     effTimes.ij <- c(effTimes.ij, endStg1)
                     nominalAlphas.ij <-
-                        nominalAlphas[ c(1:(length(effTimes.ij)-1), length(nominalAlphas) ) ]
+                        effCohort$nominalAlphas[ c( 1:(wTooLarg[1]-1), 
+                                                    length(effCohort$nominalAlphas) ) ]
                   }
               } 
           }
+
+          ## If we've not created a customized set of values 'nominalAlphas.ij' in the
+          ## code above, create it now
+          if ( !exists("nominalAlphas.ij") )
+            nominalAlphas.ij <- effCohort$nominalAlphas
+
 
           if (is.null(effCohort$nominalAlphas) ) {
             ## get the bounds using package ldbounds, function bounds()
@@ -1231,8 +1244,7 @@ monitorTrial <- function (dataFile,
                     boundType = "eff",
                     boundLabel = "Eff", 
                     lowerVE = effCohort$nullVE,
-                    alphaLevel = ifelse(exists("nominalAlphas.ij"),
-                                    nominalAlphas.ij, nominalAlphas),   
+                    alphaLevel = nominalAlphas.ij,   
                     estimand= effCohort$estimand,
                     lagTime = effCohort$lagTime,
                     randFraction = null.p )
