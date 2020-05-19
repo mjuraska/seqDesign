@@ -872,6 +872,10 @@ monitorTrial <- function (dataFile,
           ## N1 <- NA
 
       #} else {  # This 'else' goes on FOREVER!
+
+          ## remove variable 'alphaNoneff.ij' if it exists
+          if ( exists("alphaNoneff.ij") ) 
+            rm( alphaNoneff.ij )
           
           ## determine 'nonEffTimes' and then do non-eff monitoring
           ## Determine the times at which nonEff monitoring will occur
@@ -928,20 +932,28 @@ monitorTrial <- function (dataFile,
 
                 ## if just one is too large, then set that last time to 'endStg1'
                 if ( length(wTooLrg) == 1 ) {
-                  nonEffTimes.ij[w] <- endStg1
+                  nonEffTimes.ij[wTooLrg] <- endStg1
 
                 #} else if ( length(nominalAlphas) == 1 ) {
                 } else if ( length(alphaNoneff) == 1 ) {
                   ## if a single alpha for all tests then set first 'too large'
                   ## time to 'endStg1' and drop the rest
-                  nonEffTimes.ij[ w[1] ] <- endStg1
-                  nonEffTimes.ij <- nonEffTimes.ij[ 1:w[1] ]
+                  nonEffTimes.ij[ wTooLrg[1] ] <- endStg1
+                  nonEffTimes.ij <- nonEffTimes.ij[ 1:wTooLrg[1] ]
 
                 } else {
-                  ## crash and burn
-                  stop("More than one of the specified non-efficacy test times was not reached.\n",
-                       "The code cannot adjust when multiple tests are missing, please re-run",
-                       "specifying fewer\n","non-efficacy tests and/or earlier times for them.\n\n")
+                  ## Issue warning but continue anyway
+                  cat("Warning: More than one of the specified non-efficacy test times was ",
+                      "not reached.\n", "The code cannot adjust the nominal alphas properly",
+                      " for this.\n", "A final test will be inserted at the end of stage1 ",
+                      "follow-up and will be carried\n", "out using the nominal alpha ",
+                      "level associated with the final scheduled test\n")
+
+                  ## replace the first missed test with a test at the end of stage 1.
+                  ## test using 'alphaLevelNoneff' corresponding to final analysis
+                  nonEffTimes.ij[ wTooLrg[1] ] <- endStg1
+                  nonEffTimes.ij <- nonEffTimes.ij[ 1:wTooLrg[1] ]
+                  alphaNoneff.ij <- alphaNoneff[ c( 1:(wTooLarg[1]-1), length(alphaNoneff) ) ]
                 }
               }
             } else {
@@ -950,7 +962,7 @@ monitorTrial <- function (dataFile,
                 ## subsetted and lagged (if required) dataset 'nedatI.j' was already created earlier
                   nonEffTimes.ij <- getInfectionTimes(nedatI.j, cnts=nonEffCnts)
               } else {
-                  nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts)
+                 nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts)
               }
 
               ## check if we "lost" any tests, due to the counts not being reached
@@ -961,10 +973,18 @@ monitorTrial <- function (dataFile,
                     nonEffTimes.ij <- c(nonEffTimes.ij, endStg1)
 
                   } else {
-                    ## crash and burn
-                    stop("More than one of the specified efficacy test counts was not reached.\n",
-                         "The code cannot adjust when multiple tests are missing, please re-run",
-                         "specifying fewer\n","efficacy tests and/or lower counts for them.\n\n")
+                    ## Issue warning but continue anyway
+                    cat("Warning: More than one of the specified non-efficacy test times was",
+                        " not reached.\n", "The code cannot adjust the nominal alphas properly",
+                        " for this.\n", "A final test will be inserted at the end of stage1 ",
+                        "follow-up and will be carried\n", "out using the nominal alpha level",
+                        " associated with the final scheduled test\n\n")
+
+                    ## add a test at the end stage 1 follow-up. Perform the test using
+                    ## using the 'alphaLevelNoneff' value corresponding to final analysis
+                    nonEffTimes.ij <- c(nonEffTimes.ij, endStg1)
+                    alphaNoneff.ij <- 
+                        alphaNoneff[ c(1:(length(nonEffTimes.ij)-1), length(alphaNoneff) ) ]
                 }
               }
 
@@ -999,7 +1019,7 @@ monitorTrial <- function (dataFile,
                   boundLabel = "NonEffInterim", 
                   lowerVE = lowerVEnoneff,
                   upperVE = upperVEnoneff,
-                  alphaLevel = alphaNoneff,
+                  alphaLevel = ifelse(exists("alphaNoneff.ij"), alphaNoneff.ij, alphaNoneff),
                   lagTime = lag,
                   estimand= est,
                   returnAll = ifelse(nCohorts>1, TRUE, FALSE),
@@ -1101,6 +1121,10 @@ monitorTrial <- function (dataFile,
           #                  estimand="cox", lagTime=2,
           #                  nominalAlphas=c(0.0030, 0.0183, 0.0440) ),
 
+          ## clear out variable, if it exists
+          if ( exists("nominalAlphas.ij") )
+            rm( nominalAlphas.ij )
+
           ## Process to derive 'effTimes.ij', etc. 
           if (effCohort$timeUnit == "time") {
               effTimes.ij <- sort(effCohort$times)
@@ -1111,19 +1135,27 @@ monitorTrial <- function (dataFile,
 
                 ## if just one is too large, then set that last time to 'endStg1'
                 if ( length(wTooLrg) == 1 ) {
-                  effTimes.ij[w] <- endStg1 
+                  effTimes.ij[wTooLrg] <- endStg1 
 
                 } else if ( length(effCohort$nominalAlphas) == 1 ) {
                   ## if a single alpha for all tests then set first 'too large'
                   ## time to 'endStg1' and drop the rest 
-                  effTimes.ij[ w[1] ] <- endStg1 
-                  effTimes.ij <- effTimes.ij[ 1:w[1] ]
+                  effTimes.ij[ wTooLrg[1] ] <- endStg1 
+                  effTimes.ij <- effTimes.ij[ 1:wTooLrg[1] ]
                  
                 } else {
-                  ## crash and burn
-                  stop("More than one of the specified efficacy test times was not reached.\n",
-                       "The code cannot adjust when multiple tests are missing, please re-run",
-                       "specifying fewer\n","efficacy tests and/or earlier times for them.\n\n")
+                  ## Issue warning but continue anyway
+                  cat("Warning: More than one of the specified efficacy test times was ",
+                      "not reached.\n", "The code cannot adjust the nominalAlphas properly",
+                      " for this.\n", "A final test will be inserted at the end of stage1 ",
+                      "follow-up and will be carried\n", "out using the nominal alpha ",
+                      "level associated with the final scheduled test\n")
+
+                  ## replace the first missed test with a test at the end of stage 1.
+                  ## test using 'alphaLevelNoneff' corresponding to final analysis
+                  effTimes.ij[ wTooLrg[1] ] <- endStg1
+                  effTimes.ij   <- effTimes.ij[ 1:wTooLrg[1] ]
+                  nominalAlphas.ij <- nominalAlphas[ c( 1:(wTooLarg[1]-1), length(nominalAlphas) ) ]
                 }
               }
           } else {
@@ -1158,10 +1190,18 @@ monitorTrial <- function (dataFile,
                   if (nLost==1 || length(effCohort$nominalAlphas)==1 ) {
                     effTimes.ij <- c(effTimes.ij, endStg1)
                   } else {
-                    ## crash and burn
-                    stop("More than one of the specified efficacy test counts was not reached.\n",
-                         "The code cannot adjust when multiple tests are missing, please re-run",
-                         "specifying fewer\n","efficacy tests and/or lower counts for them.\n\n")
+                    ## Issue warning but continue anyway
+                    cat("Warning: More than one of the specified efficacy test times was",
+                        " not reached.\n", "The code cannot adjust the nominalAlphas properly",
+                        " for this.\n", "A final test will be inserted at the end of stage1 ",
+                        "follow-up and will be carried\n", "out using the nominal alpha level",
+                        " associated with the final scheduled test\n\n")
+
+                    ## add a test at the end stage 1 follow-up. Perform the test using
+                    ## using the 'alphaLevelNoneff' value corresponding to final analysis
+                    effTimes.ij <- c(effTimes.ij, endStg1)
+                    nominalAlphas.ij <-
+                        nominalAlphas[ c(1:(length(effTimes.ij)-1), length(nominalAlphas) ) ]
                   }
               } 
           }
@@ -1191,7 +1231,8 @@ monitorTrial <- function (dataFile,
                     boundType = "eff",
                     boundLabel = "Eff", 
                     lowerVE = effCohort$nullVE,
-                    alphaLevel = nominalAlphas,
+                    alphaLevel = ifelse(exists("nominalAlphas.ij"),
+                                    nominalAlphas.ij, nominalAlphas),   
                     estimand= effCohort$estimand,
                     lagTime = effCohort$lagTime,
                     randFraction = null.p )
