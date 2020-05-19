@@ -81,9 +81,28 @@
 #' 
 #' @export
 simTrial <- function(N,
-                    aveVE,
-                    VEmodel=c("half", "constant"),
+                    ## aveVE should not be specified if 'veByPeriod' is specified
+                    aveVE=NULL,
+                    ## option 'manual' added to use when using 'veByPeriod', though in the
+                    ## code I'll probably just ignorethis variable when veByPeriod is set
+                    VEmodel=c("half", "constant", "manual"),
                     vePeriods,
+                    ## 'veByPeriod' is used to specify VEs for each period in 'vePeriods', for
+                    ## each treatment group.  It can be specified in two ways, one is by providing
+                    ## values for 'fullVE' and then providing relative values for each vePeriod
+                    ## e.g. if length(vePeriods)=4 (so 3 periods)
+                    ##   veByPeriod=list(fullVE=c(0,.6),
+                    ##                   C1 = c(1, 1, 1),
+                    ##                   T1 = c(.5, .75, 1) )
+                    ## Or by directly specifying the VEs without using fullVE, 
+                    ## e.g. 
+                    ##   veByPeriod=list(C1 = c(0, 0, 0),
+                    ##                   T1 = c(.3, .45, 0.6) )
+                    ## The first component (after 'fullVE' - if it exists) must be the 
+                    ## control/placebo arm, followed by the treatment arms.  The control arm should
+                    ## be named 'C1' and the treatment arms 'T1', 'T2', ...
+                    ## If fullVE is specified, is should have the same length as the number of arms
+                    veByPeriod = NULL,
                     enrollPeriod,
                     enrollPartial,
                     enrollPartialRelRate,
@@ -101,29 +120,84 @@ simTrial <- function(N,
                     verbose = TRUE,
                     randomSeed = NULL) {
 
-VEmodel <- match.arg(VEmodel)
+if ( !is.null(veByPeriod) ) {
+  ## make a copy then, do some checks
+  veBP <- veByPeriod
+
+  if ( !is.null(aveVE) )
+    stop("Arguments 'veByPeriod' and 'aveVE' cannot both be specified\n\n")
+
+  if (!is.null(veByPeriod$fullVE) ) {
+    fullVE <- veByPeriod$fullVE
+
+    ## remove this component
+    veBP$fullVE <- NULL
   
-## verify whether length of 'N' = length of 'aveVE'
-if ( length(aveVE) != length(N) ) 
-   stop( "Length of 'aveVE' does not match the number of treatment arms given in 'N'.\n" )
+    if ( length(fullVE) != length(veBP) )
+      stop("The length of veByPeriod$fullVE must match the number of other components\n",
+           "specified in list veByPeriod\n\n")
+
+    ## multiply fullVE by the values provided
+    veBP[] <- lapply(1:length(fullVE), function(i, fVE, vbp) {
+                     ## multiply the i-th fullVE value by the relative VEs from i-th arm
+                     fVE[i]*vbp[[i]] }, fVE=fullVE, vbp=veBP )
+
+  } else {
+    ## 'fullVE' was not specified, derive it as the max of the values from each arms
+    fullVE <- sapply(veBP, max) 
+  }
+
+}
+
+## if 
+if (is.null( veByPeriod) ) {
+  VEmodel <- match.arg(VEmodel)
+} else {
+  if (!missing(VEmodel) && VEmodel != "manual")
+    cat("Note: You have specified 'veByPeriod' but not set argument 'VEmodel'\n",
+        "to 'manual'. The value of 'VEmodel' you provided will be ignored\n\n")
+  VEmodel <- "manual" 
+}
+  
 
 ## total number of trial participants
 Nppt = sum(N)
 
-## VE for placebo arm
-nullVE = aveVE[1]
+if ( !is.null(veByPeriod) ) {
+  if (! "C1" %in% names(veBP) )
+    stop("There must be a control arm named 'C1' specified in'veByPeriod'\n\n")
+ 
+  ## number of vaccine arms
+  nVaccArms = length(veBP) - 1
 
-## VE for vaccine arms
-aveVE = aveVE[-1] 
+  if ( any(names(veBP) != c("C1", paste0("T",1:nVaccArms)) ) ) 
+    stop("The components of veByPeriod must be named 'C1', 'T1', 'T2', ...\n\n")
 
-## number of vaccine arms
-nVaccArms = length(aveVE)
+  ## the null VE will be the first VE of "C1" 
+  nullVE <- veBP[["C1"]][1]
+} else {
+  ## verify whether length of 'N' = length of 'aveVE'
+  if ( length(aveVE) != length(N) ) 
+     stop( "Length of 'aveVE' does not match the number of treatment arms given in 'N'.\n" )
+
+  ## VE for placebo arm
+  nullVE = aveVE[1]
+
+  ## VE for vaccine arms
+  aveVE = aveVE[-1] 
+
+  ## number of vaccine arms
+  nVaccArms = length(aveVE)
+}
 
 ## total number of arms (assumes a single control arm)
 nArms <- nVaccArms + 1
 
 ## create vector of treatment group names: 
 trtArms <- c("C1", paste("T", 1:nVaccArms, sep=""))
+
+
+
 
 ## 'enrollRate' is the required weekly enrollment rate needed to enroll the expected 'Nppt' subjects 
 ## in 'enrollPeriod' accounting for partial enrollment rate during the initial 'enrollPartial' weeks
@@ -163,7 +237,7 @@ enrollSchedule <- data.frame(
                       end   = c( enrollPartial, NA ),
                       relativeRate = c( enrollPartialRelRate, 1) )
 
-if( VEmodel!="constant" ) {
+if( VEmodel!="constant" && is.null(veByPeriod)) {
   # if the VE model is different from constant, then it is assumed to be defined by either 2 or 3 time intervals specified by 'vePeriods'
   # more than 3 time intervals are currently not supported
   if (length(vePeriods)==3){
@@ -205,57 +279,73 @@ if( VEmodel!="constant" ) {
     stop("The argument 'vePeriods' must have length either 2 or 3 for this type of VE model.")
   }
   
-} else {
+} else if (VEmodel=="constant") {
   vaccEff <- aveVE
 }
 
-## - 'VEs' are true vaccine efficacies used for data generation
-## - 'VEs' is a list with one component per treatment
-## - each component is a vector of vaccine efficacies applied in various time
-##   periods of the trial (e.g., partial-VE, full-VE, and waning-VE period)
-VEs <- vector("list", nVaccArms)
+if (is.null(veByPeriod) ) {
+  ## - 'VEs' are true vaccine efficacies used for data generation
+  ## - 'VEs' is a list with one component per treatment
+  ## - each component is a vector of vaccine efficacies applied in various time
+  ##   periods of the trial (e.g., partial-VE, full-VE, and waning-VE period)
+  VEs <- vector("list", nVaccArms)
 
-for (ii in 1:nVaccArms) {
-  if (VEmodel=="half"){
-    if (length(vePeriods)==3){
-      VEs[[ii]] = c(vaccEff[ii]/2, vaccEff[ii], aveVE[ii])      
-    } else if (length(vePeriods)==2){
-      VEs[[ii]] = c(vaccEff[ii]/2, vaccEff[ii])
+  for (ii in 1:nVaccArms) {
+    if (VEmodel=="half"){
+      if (length(vePeriods)==3){
+        VEs[[ii]] = c(vaccEff[ii]/2, vaccEff[ii], aveVE[ii])      
+      } else if (length(vePeriods)==2){
+        VEs[[ii]] = c(vaccEff[ii]/2, vaccEff[ii])
+      }
+    }
+    if (VEmodel=="constant"){
+      VEs[[ii]] = aveVE[ii]
     }
   }
-  if (VEmodel=="constant"){
-    VEs[[ii]] = aveVE[ii]
-  }
-}
-names(VEs) <- paste("T", 1:length(vaccEff), sep="")
+  names(VEs) <- paste("T", 1:length(vaccEff), sep="")
 
-if ( length(VEs) != nVaccArms ) 
-    stop( "VEs specified don't match the number of vaccine arms given in nVaccArms.\n" )
+  if ( length(VEs) != nVaccArms ) 
+      stop( "VEs specified don't match the number of vaccine arms given in nVaccArms.\n" )
+} else {
+  VEs <- veBP[[-1]]
+}
 
 ## 'infecRateTbl' contains information on relative infection rates (hazard 
 ##  ratios) for each treatment.  Please use "Inf" rather than NA to represent 
 ##  intervals that continue indefinitely.
 
-## Each treatment must have a record starting at time 1 and must not have time
-## gaps in it.  It does not need to extend to time "Inf" but typically should.
-infecRateList <- vector("list", nArms)
-names(infecRateList) <- c("C1", names(VEs))
+if (is.null(veByPeriod) ) {
+  ## Each treatment must have a record starting at time 1 and must not have time
+  ## gaps in it.  It does not need to extend to time "Inf" but typically should.
+  infecRateList <- vector("list", nArms)
+  names(infecRateList) <- c("C1", names(VEs))
 
-infecRateList[[1]] <- data.frame( trt = "C1", start = 1, end = Inf, relRate = 1)
+  infecRateList[[1]] <- data.frame( trt = "C1", start = 1, end = Inf, relRate = 1)
 
-for (ii in 2:nArms) {
-  trtName <- names(VEs)[ii-1]
-  if (VEmodel=="half"){
-    infecRateList[[ii]] <- data.frame( trt = trtName,  start = vePeriods,
-                                       end = c(vePeriods[-1]-1, Inf), 
-                                       relRate = 1 - VEs[[trtName]] )
+  for (ii in 2:nArms) {
+    trtName <- names(VEs)[ii-1]
+    if (VEmodel=="half"){
+      infecRateList[[ii]] <- data.frame( trt = trtName,  start = vePeriods,
+                                         end = c(vePeriods[-1]-1, Inf), 
+                                         relRate = 1 - VEs[[trtName]] )
+    }
+    if (VEmodel=="constant"){
+      infecRateList[[ii]] <- data.frame( trt = trtName, start = vePeriods,
+                                         end = Inf, relRate = 1 - VEs[[trtName]] )
+    }
   }
-  if (VEmodel=="constant"){
-    infecRateList[[ii]] <- data.frame( trt = trtName, start = vePeriods,
-                                       end = Inf, relRate = 1 - VEs[[trtName]] )
-  }
+  infecRateTbl <- do.call(rbind, infecRateList)
+} else {
+
+  infecRateList <- lapply(1:length(veBP), function(i,veBP,veP) {
+                            data.frame( trt = names(veBP)[i],
+                                        start = veP,
+                                        end = c(veP[-1], Inf),
+                                        relRate= 1 - veBP[[i]] )
+                            }, veBP=veBP, veP=vePeriods )
+  infecRateTbl  <- do.call(rbind, infecRateList)
+
 }
-infecRateTbl <- do.call(rbind, infecRateList)
 
 ## specify prior distributions for data simulation
 simParList <- parSet
@@ -367,6 +457,7 @@ trialObj <- list( trialData = trialList,
                   nTrials = nTrials,
                   N = Nppt,
                   nArms = nArms,
+                  fullVE = ifelse(exists("fullVE"), fullVE, vaccEff),
                   trtAssgnProbs = trtAssgnProbs,
                   blockSize = blockSize,
                   fuTime = fuTime,
@@ -383,13 +474,16 @@ trialObj <- list( trialData = trialList,
 
   # save trial output and information on used rates
   if (!is.null(saveDir)) {
-      if (is.null(saveFile) ) 
-        saveFile <- 
-            paste0("simTrial_nPlac=", N[1], "_nVacc=", 
-                   paste(N[-1], collapse="_"), "_aveVE=",
-                   paste( round(aveVE,2), collapse="_"),
-                   "_infRate=", format(infecRate, digits=3, nsmall=3),".RData" )
+      if ( is.null(saveFile) ) {
+        infecRate.fmt <- format(infecRate, digits=3, nsmall=3)
+        saveFile <- paste0(
+           "simTrial_nPlac=", N[1], "_nVacc=", paste(N[-1], collapse="_"), 
+           ifelse( exists("aveVE"), 
+             paste0("_aveVE=",  paste( round(aveVE,2), collapse="_")),
+             paste0("_fullVE=", paste( round(fullVE,2), collapse="_")) ),
+           "_infRate=", format(infecRate, digits=3, nsmall=3), ".RData" )
 
+      }
     #save(trialObj, file=file.path(saveDir, saveFile), compress="xz")
     save(trialObj, file=file.path(saveDir, saveFile))
 
