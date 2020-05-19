@@ -953,7 +953,7 @@ monitorTrial <- function (dataFile,
                   ## test using 'alphaLevelNoneff' corresponding to final analysis
                   nonEffTimes.ij[ wTooLrg[1] ] <- endStg1
                   nonEffTimes.ij <- nonEffTimes.ij[ 1:wTooLrg[1] ]
-                  alphaNoneff.ij <- alphaNoneff[ c( 1:(wTooLarg[1]-1), length(alphaNoneff) ) ]
+                  alphaNoneff.ij <- alphaNoneff[ c( 1:(wTooLrg[1]-1), length(alphaNoneff) ) ]
                 }
               }
             } else {
@@ -1160,7 +1160,7 @@ monitorTrial <- function (dataFile,
                   effTimes.ij[ wTooLrg[1] ] <- endStg1
                   effTimes.ij   <- effTimes.ij[ 1:wTooLrg[1] ]
                   nominalAlphas.ij <- 
-                    effCohort$nominalAlphas[ c( 1:(wTooLarg[1]-1), 
+                    effCohort$nominalAlphas[ c( 1:(wTooLrg[1]-1), 
                                                 length(effCohort$nominalAlphas) ) ]
                 }
               }
@@ -1207,7 +1207,7 @@ monitorTrial <- function (dataFile,
                     ## using the 'alphaLevelNoneff' value corresponding to final analysis
                     effTimes.ij <- c(effTimes.ij, endStg1)
                     nominalAlphas.ij <-
-                        effCohort$nominalAlphas[ c( 1:(wTooLarg[1]-1), 
+                        effCohort$nominalAlphas[ c( 1:(length(effTimes.ij)-1), 
                                                     length(effCohort$nominalAlphas) ) ]
                   }
               } 
