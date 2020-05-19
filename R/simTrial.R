@@ -87,21 +87,32 @@ simTrial <- function(N,
                     ## code I'll probably just ignorethis variable when veByPeriod is set
                     VEmodel=c("half", "constant", "manual"),
                     vePeriods,
-                    ## 'veByPeriod' is used to specify VEs for each period in 'vePeriods', for
-                    ## each treatment group.  It can be specified in two ways, one is by providing
-                    ## values for 'fullVE' and then providing relative values for each vePeriod
-                    ## e.g. if length(vePeriods)=4 (so 3 periods)
-                    ##   veByPeriod=list(fullVE=c(0,.6),
-                    ##                   C1 = c(1, 1, 1),
-                    ##                   T1 = c(.5, .75, 1) )
-                    ## Or by directly specifying the VEs without using fullVE, 
-                    ## e.g. 
-                    ##   veByPeriod=list(C1 = c(0, 0, 0),
-                    ##                   T1 = c(.3, .45, 0.6) )
+                    ## 'veByPeriod' is a list argument used to specify VEs for each trial arm
+                    ## (including the control arm) for each period in 'vePeriods'.
+                    ## It can be specified in two ways, one is by providing values for 'fullVE'
+                    ## and then providing relative values for each vePeriod, and the other is
+                    ## by specifying the VEs directly.  These two cases are illustrated below.
+                    ## e.g. if length(vePeriods)=3 and the treatment is assum
+                    ## Example:  
+                    ##   For a three-arm trial with three vePeriods, one treatment arm with 
+                    ##   VEs of 30%, 45% and 60% for the three periods, respectively, and the
+                    ##   other trt arm with VEs of 10%, 15% and 20%.  The control arm, by defn 
+                    ##   has VE of 0% for all periods.
+                    ##   (a) veByPeriod = list(
+                    ##          fullVE = c(  0,  .6, .2),
+                    ##              C1 = c(  1,   1,  1),
+                    ##              T1 = c( .5, .75,  1),
+                    ##              T2 = c( .5, .75,  1)  )
+                    ##       and
+                    ##   (b) veByPeriod = list(
+                    ##              C1 = c( 0,   0,  0),
+                    ##              T1 = c(.3, .45, .6), 
+                    ##              T2 = c(.1, .15, .2) )
+                    ##
                     ## The first component (after 'fullVE' - if it exists) must be the 
                     ## control/placebo arm, followed by the treatment arms.  The control arm should
                     ## be named 'C1' and the treatment arms 'T1', 'T2', ...
-                    ## If fullVE is specified, is should have the same length as the number of arms
+                    ## If fullVE is specified, it must have the same length as the number of arms
                     veByPeriod = NULL,
                     enrollPeriod,
                     enrollPartial,
