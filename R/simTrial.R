@@ -489,7 +489,7 @@ trialObj <- list( trialData = trialList,
         infecRate.fmt <- format(infecRate, digits=3, nsmall=3)
         saveFile <- paste0(
            "simTrial_nPlac=", N[1], "_nVacc=", paste(N[-1], collapse="_"), 
-           ifelse( exists("aveVE"), 
+           ifelse( !missing(aveVE), 
              paste0("_aveVE=",  paste( round(aveVE,2), collapse="_")),
              paste0("_fullVE=", paste( round(fullVE,2), collapse="_")) ),
            "_infRate=", format(infecRate, digits=3, nsmall=3), ".RData" )
