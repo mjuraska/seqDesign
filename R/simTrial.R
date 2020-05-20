@@ -92,7 +92,6 @@ simTrial <- function(N,
                     ## It can be specified in two ways, one is by providing values for 'fullVE'
                     ## and then providing relative values for each vePeriod, and the other is
                     ## by specifying the VEs directly.  These two cases are illustrated below.
-                    ## e.g. if length(vePeriods)=3 and the treatment is assum
                     ## Example:  
                     ##   For a three-arm trial with three vePeriods, one treatment arm with 
                     ##   VEs of 30%, 45% and 60% for the three periods, respectively, and the
@@ -181,7 +180,7 @@ if ( !is.null(veByPeriod) ) {
   ## number of vaccine arms
   nVaccArms = length(veBP) - 1
 
-  if ( any(names(veBP) != c("C1", paste0("T",1:nVaccArms)) ) ) 
+  if ( any(! names(veBP) %in% c("C1", paste0("T",1:nVaccArms)) ) ) 
     stop("The components of veByPeriod must be named 'C1', 'T1', 'T2', ...\n\n")
 
   ## the null VE will be the first VE of "C1" 
@@ -348,13 +347,28 @@ if (is.null(veByPeriod) ) {
   infecRateTbl <- do.call(rbind, infecRateList)
 } else {
 
-  infecRateList <- lapply(1:length(veBP), function(i,veBP,veP) {
-                            data.frame( trt = names(veBP)[i],
+  ## if C1 has the same rate for all periods (which it should!) collapse to a single row
+  if ( length( unique(veBP[["C1"]])) == 1 )
+    infecRateC1 <- data.frame(trt="C1", start=1, end=Inf, relRate=1 - veBP[["C1"]][1],
+                              stringsAsFactors=FALSE )
+  else infecRateC1 <- NULL
+
+  comps <- names(veBP)
+  if ( !is.null(infecRateC1) ) 
+    comps <- comps[ comps != "C1" ] 
+   
+  ## create a similar structure for the other arms
+  infecRateList <- lapply(comps, function(nam, veBP, veP) {
+                            i <- which(names(veBP) == nam )
+                            data.frame( trt = nam,
                                         start = veP,
-                                        end = c(veP[-1], Inf),
-                                        relRate= 1 - veBP[[i]] )
+                                        end = c(veP[-1]-1, Inf),
+                                        relRate= 1 - veBP[[i]],
+                                        stringsAsFactors=FALSE )
                             }, veBP=veBP, veP=vePeriods )
-  infecRateTbl  <- do.call(rbind, infecRateList)
+
+  ## rbind them together into a single data.frame
+  infecRateTbl  <- do.call(rbind, c(list(infecRateC1), infecRateList) )
 
 }
 
