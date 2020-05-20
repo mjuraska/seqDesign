@@ -752,17 +752,164 @@ monitorTrial <- function (dataFile,
       if ( !exists("N1.ne") && exists("N1") )
         N1.ne <- N1
 
-      ## Now get 'N1' for the cases where we don't have it, which should only
-      ## be when laggedMonitoring was specified
-      if ( !exists("N1") && neTimingDiff ) {
+
+      ## ----------------  Process nonEff timing args -------------------
+      ## We need to process the timing information for non-efficacy monitoring now,
+      ## because it's used to determine when harm monitoring will end
+      ## The code is LONG :(
+
+      ## determine end of stage 1 time, needed if any specified monitoring times/counts
+      ## are not attained in stage 1.
+      ## [ endStg1 == calendar time at which stage 1 follow-up ends ]
+      endStg1 <- max( datI.j$exit )
+
+      if ( neTimingDiff ) {
         if (neTimeCohInd) {
            nedatI.j <- datI.j[ datI.j[[nonEffTimingCohort$cohortInd]]==1, ]
         } else {
            nedatI.j <- datI.j
         }
-        N1 <- getFirstNonEffCnt(
-                 nedatI.j, minCnt=N1.ne, 
-                 lagTimes=nonEffTimingCohort$lagTime, lagMinCnts=N1.ne)
+        if (laggedMonitoring) {
+          nedatI.j <- censorTrial( nedatI.j, times=nonEffTimingCohort$lagTime,
+                                   timeScale="follow-up", type="left")
+        }
+        nInfec.ne <- sum( nedatI.j$event == 1 )
+      }
+
+      ## create new variable, 'nInfec_nonEff' that will contain the total number of
+      ## infections under the chosen non-efficacy monitoring cohort
+      nInfec_nonEff <- ifelse(neTimingDiff, nInfec.ne, nInfec)
+
+      ## remove variable 'alphaNoneff.ij' if it exists
+      if ( exists("alphaNoneff.ij") ) 
+        rm( alphaNoneff.ij )
+      
+      ## determine 'nonEffTimes' and then do non-eff monitoring
+      ## Determine the times at which nonEff monitoring will occur
+      if (is.null(nonEffTimes)) {
+        if (nonEffIntervalUnit == "counts") {
+
+          ## makes sequence of counts at which analyses will be done
+          if (length(nonEffInterval)==1){
+            # then a constant increment in the endpoint count is assumed
+            nonEffCnts <- seq(from = N1.ne, to = nInfec_nonEff, by = nonEffInterval)  
+          } else {
+            # then 'nonEffInterval' is a vector of potentially variable increments
+            # specifying endpoint counts for subsequent interim looks following the
+            # initial look
+            nonEffCnts <- cumsum(c(N1.ne, nonEffInterval))
+          }
+
+          ## Convert counts into times.  
+          if ( neTimingDiff ) {
+            ## subsetted and lagged (if required) dataset 'nedatI.j' was already created earlier
+              nonEffTimes.ij <- getInfectionTimes(nedatI.j, cnts=nonEffCnts, lagTime=NULL )
+          } else {
+              nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts)
+          }
+        } else {
+            ## User specified a time-sequence for monitoring. Figure out when the first 
+            ## time and last times will be, then create the sequence
+            firstLastnonEffTimes <- 
+                getInfectionTimes(datI.j, cnts=c(N1.ne, nInfec_nonEff), 
+                                  lagTime=nonEffTimeLag )
+
+            if (length(nonEffInterval)==1){
+              nonEffTimes.ij <- 
+                seq(from = firstLastnonEffTimes[1],
+                    to = firstLastnonEffTimes[2],
+                    by = nonEffInterval)
+            } else {
+              # then 'nonEffInterval' is a vector of potentially variable time increments
+              #nonEffTimes <- c(firstLastnonEffTimes[1], firstLastnonEffTimes[1] + cumsum(nonEffInterval))
+              nonEffTimes.ij <- cumsum( c(firstLastnonEffTimes[1], nonEffInterval) )
+
+              ## truncate so that nonEffTimes don't go beyond the trial duration
+              nonEffTimes.ij <- nonEffTimes[ nonEffTimes <= firstLastnonEffTimes[2] ]
+            }
+        }
+      } else {
+        ## if nonEffTimes was specified
+        if (nonEffTimeUnit == "time")  {
+          nonEffTimes.ij <- sort(nonEffTimes)
+
+          ## check if any specified times are beyond the extent of stage 1
+          if ( any(nonEffTimes.ij > endStg1) ) {
+            wTooLrg <- which( nonEffTimes.ij > endStg1 )
+
+            ## if just one is too large, then set that last time to 'endStg1'
+            if ( length(wTooLrg) == 1 ) {
+              nonEffTimes.ij[wTooLrg] <- endStg1
+
+            #} else if ( length(nominalAlphas) == 1 ) {
+            } else if ( length(alphaNoneff) == 1 ) {
+              ## if a single alpha for all tests then set first 'too large'
+              ## time to 'endStg1' and drop the rest
+              nonEffTimes.ij[ wTooLrg[1] ] <- endStg1
+                 nonEffTimes.ij <- nonEffTimes.ij[ 1:wTooLrg[1] ]
+
+            } else {
+              ## Issue warning but continue anyway
+              cat("Warning: More than one of the specified non-efficacy test times was ",
+                  "not reached.\n", "The code cannot adjust the nominal alphas properly",
+                  " for this.\n", "A final test will be inserted at the end of stage1 ",
+                  "follow-up and will be carried\n", "out using the nominal alpha ",
+                  "level associated with the final scheduled test\n")
+
+              ## replace the first missed test with a test at the end of stage 1.
+              ## test using 'alphaLevelNoneff' corresponding to final analysis
+              nonEffTimes.ij[ wTooLrg[1] ] <- endStg1
+              nonEffTimes.ij <- nonEffTimes.ij[ 1:wTooLrg[1] ]
+              alphaNoneff.ij <- alphaNoneff[ c( 1:(wTooLrg[1]-1), length(alphaNoneff) ) ]
+            }
+          }
+        } else {
+
+          if ( neTimingDiff ) {
+            ## subsetted and lagged (if required) dataset 'nedatI.j' was already created earlier
+            nonEffTimes.ij <- getInfectionTimes(nedatI.j, cnts=nonEffCnts)
+          } else {
+            nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts)
+          }
+
+          ## check if we "lost" any tests, due to the counts not being reached
+          if ( length(nonEffTimes.ij) < length(nonEffCnts) )  {
+              nLost <- length(nonEffCnts) - length(nonEffTimes.ij)
+              #if (nLost==1 || length(nominalAlphas)==1) {
+              if (nLost==1 || length(alphaNoneff)==1) {
+                nonEffTimes.ij <- c(nonEffTimes.ij, endStg1)
+
+              } else {
+                ## Issue warning but continue anyway
+                cat("Warning: More than one of the specified non-efficacy test times was",
+                    " not reached.\n", "The code cannot adjust the nominal alphas properly",
+                   " for this.\n", "A final test will be inserted at the end of stage1 ",
+                    "follow-up and will be carried\n", "out using the nominal alpha level",
+                    " associated with the final scheduled test\n\n")
+
+                ## add a test at the end stage 1 follow-up. Perform the test using
+                ## using the 'alphaLevelNoneff' value corresponding to final analysis
+                nonEffTimes.ij <- c(nonEffTimes.ij, endStg1)
+                alphaNoneff.ij <- 
+                    alphaNoneff[ c(1:(length(nonEffTimes.ij)-1), length(alphaNoneff) ) ]
+            }
+          }
+        }
+      }
+      ## if we haven't created a customized variable "alphaNoneff.ij" earlier, create it now
+      if ( !exists("alphaNoneff.ij") )
+        alphaNoneff.ij <- alphaNoneff
+
+      ## ----------------  End Processing nonEff timing args -------------------
+
+
+      ## Now get 'N1' for the cases where we don't have it, which should only
+      ## be when laggedMonitoring was specified
+      if ( !exists("N1") && neTimingDiff ) {
+
+        ## determine the total infection count (based on full set of data) that corresponds
+        ## to the first non-eff test time
+        N1 <- sum( datI.j$event==1 & datI.j$exit <= nonEffTimes.ij[1] ) 
       }
 
       ## Ensure we have harm bounds up to 'N1', if not, regenerate them
@@ -831,169 +978,24 @@ monitorTrial <- function (dataFile,
       ## 2. begin non-eff monitoring prep
       ## --------------------------------
 
-      if ( neTimingDiff ) {
-        if (neTimeCohInd) {
-           nedatI.j <- datI.j[ datI.j[[nonEffTimingCohort$cohortInd]]==1, ]
-        } else {
-           nedatI.j <- datI.j
-        }
-        if (laggedMonitoring) {
-          nedatI.j <- censorTrial( nedatI.j, times=nonEffTimingCohort$lagTime,
-                                   timeScale="follow-up", type="left")
-        }
-        nInfec.ne <- sum( nedatI.j$event == 1 )
-      }
-
-      ## determine end of stage 1 time, needed if any specified monitoring times/counts
-      ## are not attained in stage 1.
-      ## endStg1 == calendar time at which stage 1 follow-up ends
-      endStg1 <- max( datI.j$exit )
-
-      ## create new variable, 'nInfec_nonEff' that will contain the total number of
-      ## infections under the chosen method of non-efficacy monitoring (i.e based on
-      ## regular or lagged infections/events)
-      nInfec_nonEff <- ifelse(neTimingDiff, nInfec.ne, nInfec)
-
       ## I don't think I need to skip this situation.  The later code that deals with
       ## test times that are not reached should be used to handle it
       #if (N1.ne > nInfec_nonEff ) {
           ## deal with annoying case where the trial didn't have enough infec.s
           ## to reach the start point of the non-eff. interim analyses
-           
+
           ## For now we do nothing, except skip all the interim analysis code
           ## and go directly to the finalStage1 test
-      #    nonEffTimes.ij <- NA
+      #   nonEffTimes.ij <- NA
 
           ## create an empty object futRes needed later to make code work
-      #    futRes <- list()
-      #    effRes <- list()
+      #   futRes <- list()
+      #   effRes <- list()
 
           ## Set 'N1' to NA ??  Need to think about it
           ## N1 <- NA
 
       #} else {  # This 'else' goes on FOREVER!
-
-          ## remove variable 'alphaNoneff.ij' if it exists
-          if ( exists("alphaNoneff.ij") ) 
-            rm( alphaNoneff.ij )
-          
-          ## determine 'nonEffTimes' and then do non-eff monitoring
-          ## Determine the times at which nonEff monitoring will occur
-          if (is.null(nonEffTimes)) {
-            if (nonEffIntervalUnit == "counts") {
-
-              ## makes sequence of counts at which analyses will be done
-              if (length(nonEffInterval)==1){
-                # then a constant increment in the endpoint count is assumed
-                nonEffCnts <- seq(from = N1.ne, to = nInfec_nonEff, by = nonEffInterval)  
-              } else {
-                # then 'nonEffInterval' is a vector of potentially variable increments
-                # specifying endpoint counts for subsequent interim looks following the
-                # initial look
-                nonEffCnts <- cumsum(c(N1.ne, nonEffInterval))
-              }
-
-              ## Convert counts into times.  
-              if ( neTimingDiff ) {
-                ## subsetted and lagged (if required) dataset 'nedatI.j' was already created earlier
-                  nonEffTimes.ij <- getInfectionTimes(nedatI.j, cnts=nonEffCnts, lagTime=NULL )
-              } else {
-                  nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts)
-              }
-            } else {
-                ## User specified a time-sequence for monitoring. Figure out when the first 
-                ## time and last times will be, then create the sequence
-                firstLastnonEffTimes <- 
-                    getInfectionTimes(datI.j, cnts=c(N1.ne, nInfec_nonEff), 
-                                      lagTime=nonEffTimeLag )
-
-                if (length(nonEffInterval)==1){
-                  nonEffTimes.ij <- 
-                    seq(from = firstLastnonEffTimes[1],
-                        to = firstLastnonEffTimes[2],
-                        by = nonEffInterval)
-                } else {
-                  # then 'nonEffInterval' is a vector of potentially variable time increments
-                  #nonEffTimes <- c(firstLastnonEffTimes[1], firstLastnonEffTimes[1] + cumsum(nonEffInterval))
-                  nonEffTimes.ij <- cumsum( c(firstLastnonEffTimes[1], nonEffInterval) )
-
-                  ## truncate so that nonEffTimes don't go beyond the trial duration
-                  nonEffTimes.ij <- nonEffTimes[ nonEffTimes <= firstLastnonEffTimes[2] ]
-                }
-            }
-          } else {
-            ## if nonEffTimes was specified
-            if (nonEffTimeUnit == "time")  {
-              nonEffTimes.ij <- sort(nonEffTimes)
-
-              ## check if any specified times are beyond the extent of stage 1
-              if ( any(nonEffTimes.ij > endStg1) ) {
-                wTooLrg <- which( nonEffTimes.ij > endStg1 )
-
-                ## if just one is too large, then set that last time to 'endStg1'
-                if ( length(wTooLrg) == 1 ) {
-                  nonEffTimes.ij[wTooLrg] <- endStg1
-
-                #} else if ( length(nominalAlphas) == 1 ) {
-                } else if ( length(alphaNoneff) == 1 ) {
-                  ## if a single alpha for all tests then set first 'too large'
-                  ## time to 'endStg1' and drop the rest
-                  nonEffTimes.ij[ wTooLrg[1] ] <- endStg1
-                  nonEffTimes.ij <- nonEffTimes.ij[ 1:wTooLrg[1] ]
-
-                } else {
-                  ## Issue warning but continue anyway
-                  cat("Warning: More than one of the specified non-efficacy test times was ",
-                      "not reached.\n", "The code cannot adjust the nominal alphas properly",
-                      " for this.\n", "A final test will be inserted at the end of stage1 ",
-                      "follow-up and will be carried\n", "out using the nominal alpha ",
-                      "level associated with the final scheduled test\n")
-
-                  ## replace the first missed test with a test at the end of stage 1.
-                  ## test using 'alphaLevelNoneff' corresponding to final analysis
-                  nonEffTimes.ij[ wTooLrg[1] ] <- endStg1
-                  nonEffTimes.ij <- nonEffTimes.ij[ 1:wTooLrg[1] ]
-                  alphaNoneff.ij <- alphaNoneff[ c( 1:(wTooLrg[1]-1), length(alphaNoneff) ) ]
-                }
-              }
-            } else {
-
-              if ( neTimingDiff ) {
-                ## subsetted and lagged (if required) dataset 'nedatI.j' was already created earlier
-                  nonEffTimes.ij <- getInfectionTimes(nedatI.j, cnts=nonEffCnts)
-              } else {
-                 nonEffTimes.ij <- getInfectionTimes(datI.j, cnts=nonEffCnts)
-              }
-
-              ## check if we "lost" any tests, due to the counts not being reached
-              if ( length(nonEffTimes.ij) < length(nonEffCnts) )  {
-                  nLost <- length(nonEffCnts) - length(nonEffTimes.ij)
-                  #if (nLost==1 || length(nominalAlphas)==1) {
-                  if (nLost==1 || length(alphaNoneff)==1) {
-                    nonEffTimes.ij <- c(nonEffTimes.ij, endStg1)
-
-                  } else {
-                    ## Issue warning but continue anyway
-                    cat("Warning: More than one of the specified non-efficacy test times was",
-                        " not reached.\n", "The code cannot adjust the nominal alphas properly",
-                        " for this.\n", "A final test will be inserted at the end of stage1 ",
-                        "follow-up and will be carried\n", "out using the nominal alpha level",
-                        " associated with the final scheduled test\n\n")
-
-                    ## add a test at the end stage 1 follow-up. Perform the test using
-                    ## using the 'alphaLevelNoneff' value corresponding to final analysis
-                    nonEffTimes.ij <- c(nonEffTimes.ij, endStg1)
-                    alphaNoneff.ij <- 
-                        alphaNoneff[ c(1:(length(nonEffTimes.ij)-1), length(alphaNoneff) ) ]
-                }
-              }
-
-            }
-          }
-          ## if we haven't created a customized variable "alphaNoneff.ij" above, create it now
-          ## based on specified values
-          if ( !exists("alphaNoneff.ij") )
-            alphaNoneff.ij <- alphaNoneff
 
           ##  ------- run non-eff ---------
 
