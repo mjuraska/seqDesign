@@ -168,95 +168,155 @@ do_harm_monitoring2 <- function(d, bounds, d2, stage1 =78,  totInfecVar="N", vac
 }
 
 ## Functions for harm boundary
-## This function creates an object containing the values of the
-## function P(n, s) which Breslow (1970, JASA) defined to be
-## for 0 <= s <= n <= N), the probability of the binomial random
-## walk S_n continuing to S_n = s without "absorption" in the
-## rejection region (i.e. without hitting the stopping bounds).
+## ------------------------------------------------------------
+## Functions for continuous monitoring harm boundary:
+
+##  Input:
+##    Bounds: Vector of stopping bounds which correspond to the infection totals
+##           1,2,3,... For infection totals where stopping is not permitted (for
+##           small infection totals, e.g. 1-7) the 'Bound' should be set to NA.
 ##
-## N = max number of samples
+##    p: The randomization probability for the active treatment, when only
+##       considering it and the placebo group (in cases when other groups exist).
+##       If there are 3 active groups and 1 placebo group, and the randomization
+##       prob.s are: 2/9, 2/9, 2/9, 3/9, (the last  being for the placebo group),
+##       then the null.p value for generating bounds for one active vs. placebo
+##       would be:   2/9 /(2/9 + 3/9) = 2/5
 ##
-## S_n = sum{ x_i, i=1,..,n }, and the {x_i} are iid bernoulli(p)
+##  Function pNS creates an object containing the values of the function P(n,s)
+##  defined by Breslow (1970, JASA) as, for 0 <= s <= n <= N,  the probability
+##  of the binomial random walk S_n reaching S_n = s without "absorption" into
+##  the rejection region (i.e. without hitting any of the stopping bounds).
 ##
-## To calculate this, we need to specify a value of 'p', 'N', and
-## a vector 'B' of length N that specifies the stopping boundares
-## associated with the values of 'n' from 1:N (respectively).  So,
-## B[1] will be the stopping value for n=1, B[2] the stopping value
-## for n=2, ..., and B[N] the stopping value for n=N.
+##  Notation:
+##    N   = max number of samples
+##    S_n = sum{ x_i, i=1,..,n }, and the {x_i} are iid bernoulli(p)
 ##
+##  To calculate P(n,s), we need to specify the probability 'p' the value 'N',
+##  and a vector 'B' of length N that specifies the stopping boundaries
+##  associated with the values of 'n' from 1:N.  Hence, B[1] will be the stopping
+##  value for n=1, B[2] the stopping value for n=2, ..., and B[N] the stopping
+##  value for n=N.
 ##
-## The object is a list with components:
+##  The vector of boundaries should contain NAs for the initial components
+##  up until you want to allow stopping (e.g. for n=1,2,3,...,8(?)
+##  how far you go will depend on the value of 'p' used.
 ##
-##   'p' - value of 'p' passed to function
-##   'N' - value of 'N' passed to function
-##   'Bounds' - data.frame with columns 'n' = 1:N and
-##              'StoppingBound'= argument 'Bound'
-##
-##   'Pns' =  list of length N, each sublist containing a numeric vector.
-##            Pns[[ i ]] is a numeric vector containing values of P(n,s)
-##            for n=i (i.e. values of P(i, s)) for values 0<= s <= i
-##
-##            Note that values of s >= Bound[i] will be set to zero (see
-##            defn of P(n,s) at top to see why).
-##
+##  The object is a list with components:
+##    Bounds - data.frame with columns 'n' = 1:N and
+##              'StoppingBound'= contents of input argument 'Bound'
+##    p - value of 'p' passed to function
+##    N - value of 'N' passed to function
+##    totalStopProb - the cumulative probability of stopping by the N-th infection
 ##   'Stop' - numeric vector of length N, with Stop[i] giving the prob.
 ##            of hitting the stopping bound (for first time) at n=i
-pNS <- function(Bound, p=.5, N=45)
+##
+##   If argument 'returnPns' is TRUE, then 'Pns' is included in the output obj.
+##       Pns is not normally needed, which is why it's been made optional.
+##   Pns =  list of length N, each sublist containing a numeric vector.
+##            Pns[[ i ]] is a numeric vector of length i+1 containing values
+##            of P(n,s), for n=i and s in 0,..,i+1
+##
+##          Note that values of s >= Bound[i] are zero as they are part of
+##          the rejection region (hence there is zero probability of reaching
+##          them without hitting the boundary).
+##
+pNS <- function(Bounds, p=.5, returnPns=FALSE)
 {
-  if( length(Bound) != N )
-    stop("Length of vector 'Bound' must equal value of argument 'N'")
-  
-  
-  ## create 'Pns' and 'Stop'
-  Stop <- numeric(N)
-  Pns <- vector("list", length=N)
-  
-  if ( is.na(Bound[1]) || Bound[1]>1 )
-  {
-    Pns[[ 1 ]] <- c("0" = (1-p), "1" = p)
-    Stop[ 1 ] <- 0
-  } else
-    stop("Why are you allowing stopping when n=1!!!")
-  
-  for (i in 2:N)
-  {
-    pv <- numeric(i+1)
-    names(pv) <- as.character(0:i)
-    Pns[[ i ]] <- pv
-    
-    max.S <- min( i, Bound[i]-1, na.rm=TRUE)
-    
-    Pns[[i]]["0"] <- (1-p)*Pns[[i-1]]["0"]
-    
-    for (s in as.character(1:max.S) )
-    {
-      s.minus.1 <- as.character( as.numeric(s)-1)
-      
-      if (as.numeric(s) < i )
-        Pns[[i]][ s ] <- p*Pns[[i-1]][s.minus.1] + (1-p)*Pns[[i-1]][s]
-      else
-        Pns[[i]][ s ] <- p*Pns[[i-1]][s.minus.1]
-    }
-    
-    ## stopping prob. is the prob. we were one below the current bound at the
-    ## last 'n', times prob. that we had another 'success'
-    if ( !is.na(Bound[i]) )
-      Stop[ i ] <- p*Pns[[ i-1 ]][ as.character(Bound[i]-1) ]
-  }
-  
-  Bounds <- data.frame( n=1:N, StoppingBound=Bound )
-  
-  totalStopProb <- sum( Stop )
-  ExpStopTime <- sum( (1:N)*(Stop) )
-  
-  
-  list(p = p, N = N, Bounds = Bounds, Pns = Pns, Stop = Stop,
-       totalStopProb = totalStopProb,  ExpStopTime = ExpStopTime)
-}
+  N <- length(Bounds)
 
+  if ( all(is.na(Bounds)) )
+    stop("The vector provided for argument 'Bounds' contains only NAs.\n",
+         "Exiting...\n\n")
+
+  if ( any(Bounds > (1:N), na.rm=TRUE) )
+      stop("The bounds provided do not appear to correspond to the infection",
+           " totals (1,2,...,N).\n", "One of more of the bounds are larger",
+           "than their corresponding infection total.  Exiting...\n\n")
+
+  ## create 'Pns' and 'Stop'. Note that Stop has initial values of 0.
+  Stop <- numeric(N)
+  Pns  <- vector("list", length=N)
+
+  ## 'first.bound' is the point at which stopping is first allowed
+  ## We checked above to make sure that not all values of Bounds are NAs
+  ## so we shouldn't have any problem with this...
+  first.bound <- which( !is.na( Bounds ) )[1]
+
+  if (first.bound == 1)
+    stop("Cannot stop at the first test. Why would you want to?\n\n")
+
+
+  ## Initialize the base level (i==1). 'i' indexes the total number of infections
+  Pns[[ 1 ]] <- c("0" = (1-p), "1" = p)
+
+  ## loop over remaining infection totals, building up the prob.s as we go
+  for (i in 2:N) {
+
+    ## initialize vector to store prob.s of the i+1 possible outcome of the
+    ## binomial(i, p) variable (the values are: 0,...,i)
+    Pns[[ i ]] <- structure( numeric(i+1), names= as.character(0:i) )
+
+    ## Only need to compute for up to the smaller of i and Bounds[i]-1
+    ## And since Bounds[i] has to be <= i, Bounds[i] is always < i, so long
+    ## as Bounds[i] exists (i.e. as long as it's not NA)
+    max.S <- ifelse( is.na(Bounds[i]), i, Bounds[i]-1)
+
+    Pns[[i]]["0"] <- (1-p)*Pns[[i-1]]["0"]
+    for (s in 1:max.S )
+    {
+      ## 'S' is character version of 's'. Used for indexing.
+      S         <- as.character( s )
+      S.minus.1 <- as.character( s-1 )
+
+      if (s < i )
+        Pns[[i]][ S ] <- p*Pns[[i-1]][S.minus.1] + (1-p)*Pns[[i-1]][S]
+      else
+        ## done when s == i (only happens if Bounds[i] is NA)
+        Pns[[i]][ S ] <- p*Pns[[i-1]][S.minus.1]
+    }
+
+    ## 'Stop' is the prob. that we encounter a stopping bound for the first
+    ## time at infection count 'i'.  Only computed if stopping is possible,
+    ## else remains at initialized value of 0.
+    if ( !is.na(Bounds[i]) )
+
+      ## If this is the first infection count at which we allow stopping, then
+      ## the stop value must be computed allowing for people using non-standard
+      ## bounds (i.e. ones that that *don't* begin with bound[n] = n).
+      if (i == first.bound && Bounds[i] < i ) {
+
+        ## stop prob. is same as in the 'normal' case (below) *plus* the prob.
+        ## that we were already at/above the number of "success" needed to stop
+        ## at the previous infection total (i.e. i-1) (for which we should have
+        ## been given a stopping bound, but weren't).
+        Stop[i] <- p*Pns[[ i-1 ]][ as.character(Bounds[i]-1) ] +
+                     sum( Pns[[ i-1 ]][as.character(Bounds[i]:(i-1))] )
+      } else {
+        ## if 'i' is not the the first total at which stopping is allowed, or
+        ## if it is, but we have a proper bound (i.e. Bounds[i] = i) then we do
+        ## we compute as this:
+        Stop[ i ] <- p*Pns[[ i-1 ]][ as.character(Bounds[i]-1) ]
+      }
+  }
+  outObj <- list(
+              totalStopProb = sum(Stop),
+              Stop = Stop,
+              Bounds  = data.frame(n=1:N, StoppingBound=Bounds),
+              N = N,
+              p = p )
+
+  ## If 'returnPns' was set to TRUE then add Pns to the output object
+  if ( isTRUE(returnPns) )
+      outObj$Pns <- Pns
+
+  return( outObj )
+}
 ####################### end of function 'pNS'#############################
 
+
 ### THIS USES 'nonConstBounds' framework to do constant-bounds.
+####################### end of function 'pNS'#############################
 ### Actually, it's constant from 5 to 45, it's zero before that, so
 ### technically it is non-constant...
 
@@ -368,7 +428,7 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
     }
     
   }
-  out <- pNS(Bound=bounds$vaccInfecBound, p=null.p, N=N)
+  out <- pNS(Bound=bounds$vaccInfecBound, p=null.p)
   
   names(out$Bounds)[ names(out$Bounds)=="StoppingBound" ] <- "Nvacc"
   boundOut <- transform(out$Bounds, Nplac= n-Nvacc, RR=round(Nvacc/(n-Nvacc),digits=2))
@@ -378,7 +438,7 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
   
   overall.alpha <- out$totalStopProb
   
-  out <- pNS(Bound=bounds$vaccInfecBound, p=null.p, N=N)
+  out <- pNS(Bound=bounds$vaccInfecBound, p=null.p)
   
   
   ## Add info on stopping probabilities to 'bounds' object
