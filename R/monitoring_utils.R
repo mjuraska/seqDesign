@@ -346,7 +346,7 @@ getAlphaPerTest <- function(harmMonitorRange, null.p, totalAlpha=0.05)
                           null.p = null.p)
         return( harmBounds$cumStopProb[ nrow(harmBounds) ] - totalAlpha )
     }
-    return( uniroot(getCumAlpha, interval = c(0,0.05), 
+    return( uniroot(getCumAlpha, interval = c(0.000001, 0.05), 
                     harmMonitorRange = harmMonitorRange, 
                     null.p=null.p)$root )
 }
@@ -431,22 +431,17 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
   out <- pNS(Bound=bounds$vaccInfecBound, p=null.p)
   
   names(out$Bounds)[ names(out$Bounds)=="StoppingBound" ] <- "Nvacc"
-  boundOut <- transform(out$Bounds, Nplac= n-Nvacc, RR=round(Nvacc/(n-Nvacc),digits=2))
-  boundOut <- cbind( boundOut, stopProb=round(out$Stop,4),
+  boundOut <- within(out$Bounds, {
+                       Nplac <- n-Nvacc
+                       RR <- round( Nvacc*(1-null.p)/(Nplac*null.p), digits=2)
+                     })
+  boundOut <- cbind( boundOut,
+                     stopProb=round(out$Stop,4),
                      cumStopProb=round(cumsum(out$Stop),4),
                      alphaVal = bounds$cutoff )
   
-  overall.alpha <- out$totalStopProb
-  
-  out <- pNS(Bound=bounds$vaccInfecBound, p=null.p)
-  
-  
-  ## Add info on stopping probabilities to 'bounds' object
-  bounds[, "stoppingProb"] <- out$Stop
-  bounds[, "cumStoppingProb"] <- cumsum( bounds[, "stoppingProb"] )
-  
-  harmBounds =  boundOut
-  names(harmBounds)[1:3]=c("N", "V", "P") 
+  harmBounds <- boundOut
+  names(harmBounds)[1:3] <- c("N", "V", "P") 
   if (!is.null(dataDir)) {
       fileName <- sprintf("harmBounds_N=%d_alphaPerTest=%6.4f_pVacc=%4.2f.csv",
                           N, round(per.test, 4), round(null.p, 2) )
