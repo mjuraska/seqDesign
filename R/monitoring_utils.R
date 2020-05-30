@@ -346,7 +346,7 @@ getAlphaPerTest <- function(harmMonitorRange, null.p, totalAlpha=0.05)
                           null.p = null.p)
         return( harmBounds$cumStopProb[ nrow(harmBounds) ] - totalAlpha )
     }
-    return( uniroot(getCumAlpha, interval = c(0.000001, 0.05), 
+    return( uniroot(getCumAlpha, interval = c(0.000001, 0.05), tol=1e-7,
                     harmMonitorRange = harmMonitorRange, 
                     null.p=null.p)$root )
 }
@@ -439,9 +439,19 @@ getHarmBound <- function(N,  ##Total number of infections desired for harm monit
                      stopProb=round(out$Stop,4),
                      cumStopProb=round(cumsum(out$Stop),4),
                      alphaVal = bounds$cutoff )
-  
+
   harmBounds <- boundOut
-  names(harmBounds)[1:3] <- c("N", "V", "P") 
+  #names(harmBounds)[1:3] <- c("N", "V", "P") 
+   
+  # Rename columns from 'old.names' to 'new.names'
+  old.names <- c("n","Nvacc","Nplac")
+  new.names <- c("N","V","P")
+  names(harmBounds)[ match(old.names, names(harmBounds)) ] <- new.names
+
+  ## reorder columns
+  ord.columns <- c("N","V","P","RR","stopProb","cumStopProb","alphaVal")
+  harmBounds <- harmBounds[, ord.columns]
+
   if (!is.null(dataDir)) {
       fileName <- sprintf("harmBounds_N=%d_alphaPerTest=%6.4f_pVacc=%4.2f.csv",
                           N, round(per.test, 4), round(null.p, 2) )
