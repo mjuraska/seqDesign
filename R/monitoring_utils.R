@@ -1001,13 +1001,35 @@ getEstHR <- function(boundType, nullHR, alpha, nEvents, randFrac){
   return(estHR$root)
 }
 
-# Computes the HR (group 1 / group 2) estimates at the boundary
-#
-# boundType - boundary type (either "eff" or "nonEff")
-# nullHR    - the null hypothesis value of the HR parameter
-# alpha     - a vector of two-sided nominal significance levels
-# nEvents   - a vector of the total number of events at each analysis (components match those of 'nEvents')
-# randFrac  - randomization fraction for group 1
+#' Estimate hazard ratios at an efficacy or non-efficacy stopping boundary defined using the Wald CI approach
+#' 
+#' Assuming an exponential survival model, hazard ratios are estimated at an efficacy or non-efficacy stopping boundary, defined using the Wald CI approach, at each group-sequential analysis.
+#' 
+#' @param boundType a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \leq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \geq \theta_0} (\code{"nonEff"}), where \eqn{\theta} is the hazard ratio and \eqn{\theta_0} is specified by \code{nullHR}
+#' @param nullHR a nonnegative numeric value specifying the hazard ratio, \eqn{\theta_0}, under the null hypothesis
+#' @param alpha a numeric vector of nominal significance levels (e.g., those defined by the O'Brien-Fleming group-sequential test)
+#' @param nEvents a numeric vector of numbers of events at which analyses is performed. The lengths of \code{alpha} and \code{nEvents} must be the same, and the components of the two vectors must correspond to each other.
+#' @param randFrac a fraction of subjects randomized to the group considered in the hazard ratio's numerator
+#' 
+#' @details Using an exponential survival model and sample estimates \eqn{\widehat{\lambda}_1} and \eqn{\widehat{\lambda}_2} of the group-specific hazard rates, the asymptotic variance of the log hazard ratio estimator 
+#' \eqn{\log \widehat{\theta} = \log (\widehat{\lambda}_1 / \widehat{\lambda}_2)} is employed together with the approximation \eqn{E\{\delta | \lambda_1\} = (\widehat{\lambda}_1 / \widehat{\lambda}_2)\, E\{\delta | \lambda_2\}}.
+#' The resultant variance approximation is \eqn{\mathrm{var} \{\log \widehat{\theta}\} = (1/D) \{ 2 + p \, \widehat{\theta} / (1 - p) + (1 - p) / (p \, \widehat{\theta}) \}},
+#' where \eqn{D} is the total number of events and \eqn{p} is the randomization fraction \code{randFrac}.
+#' 
+#' @return A numeric vector (of the same length as \code{alpha} and \code{nEvents}) of hazard ratio estimates.
+#' 
+#' @examples
+#' ## O'Brien-Fleming test of H0: HR <= 0.7 (for efficacy) at 
+#' ## 35%, 70%, and 100% of the total information under 1:1 randomization
+#' estHRbound("eff", nullHR=0.7, alpha=c(0.00030, 0.01466, 0.04548), 
+#'            nEvents=c(53, 106, 151), randFrac=0.5)
+#' 
+#' ## O'Brien-Fleming test of H0: HR >= 0.5 (for non-efficacy) at
+#' ## 35%, 70%, and 100% of the total information under 1:1 randomization
+#' estHRbound("nonEff", nullHR=0.5, alpha=c(0.00030, 0.01466, 0.04548), 
+#'            nEvents=c(53, 106, 151), randFrac=0.5)
+#'
+#' @export
 estHRbound <- function(boundType=c("eff", "nonEff"), nullHR, alpha, nEvents, randFrac){
   if (length(alpha)!=length(nEvents)){
     stop("The arguments 'alpha' and 'nEvents' must be of equal length.")

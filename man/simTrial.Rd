@@ -6,9 +6,10 @@
 \usage{
 simTrial(
   N,
-  aveVE,
-  VEmodel = c("half", "constant"),
+  aveVE = NULL,
+  VEmodel = c("half", "constant", "manual"),
   vePeriods,
+  veByPeriod = NULL,
   enrollPeriod,
   enrollPartial,
   enrollPartialRelRate,

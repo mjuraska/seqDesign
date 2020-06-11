@@ -48,7 +48,7 @@ quantile2 <- function(x, probs, na.ub=0.2){
 #' ## user specifies time points since first enrollment
 #' tabEventAccrual(simData$trialData, atWeeks=seq(52, 156, by=8), lagTimePP=6)
 #' 
-#' @seealso \code{\link(simTrial)}
+#' @seealso \code{\link{simTrial}}
 #' 
 #' @export
 tabEventAccrual <- function(trialData, atEvents=NULL, atWeeks=NULL, prob=0.5, lagTimeMITT=0, lagTimePP=NULL, namePP="pp1", na.ub=0.2){

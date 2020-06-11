@@ -12,23 +12,23 @@ monitorTrial(
   harmMonitorAlpha = 0.05,
   alphaPerTest = NULL,
   estimand = c("combined", "cox", "cuminc"),
-  effEst = c("cuminc", "cox"),
-  nonEffEst = c("combined", "cuminc", "cox"),
   nonEffStartMethod = c("FKG", "fixed", "?", "old"),
   nonEffStartParams = NULL,
   nonEffIntervalUnit = c("counts", "time"),
   nonEffInterval,
+  nonEffCohorts = list(times = NULL, timeUnit = "counts", timingCohort = list(lagTime =
+    NULL, cohortInd = NULL), cohort1 = list(estimand = "cox", lagTime = NULL, cohortInd =
+    NULL, nullVE = NULL, nominalAlphas = c(0.003, 0.0183, 0.044))),
+  effCohort = list(times = c(52, 77, 103), timeUnit = "counts", timingCohort =
+    list(lagTime = NULL, cohortInd = NULL), nullVE = 0.2, estimand = "cox", lagTime = 2,
+    cohortInd = "pp1", nominalAlphas = c(0.003, 0.0183, 0.044)),
   lowerVEnoneff = NULL,
-  upperVEnoneff,
   highVE,
   stage1VE,
   lowerVEuncPower = NULL,
-  alphaNoneff,
   alphaHigh,
   alphaStage1,
   alphaUncPower = NULL,
-  laggedMonitoring = FALSE,
-  lagTime = NULL,
   saveFile = NULL,
   saveDir = NULL,
   verbose = TRUE
@@ -47,10 +47,6 @@ monitorTrial(
 
 \item{alphaPerTest}{a per-test nominal/unadjusted alpha level for potential-harm monitoring. If \code{NULL}, a per-test alpha level is calculated that yields a cumulative alpha of \code{harmMonitorAlpha} at the end of \code{harmMonitorRange}.}
 
-\item{effEst}{a character string specifying the choice of VE estimand used in interim efficacy monitoring, final efficacy analysis, end-of-Stage-1 testing, and unconditional power calculations. Two options are implemented: (1) cumulative incidence-based VE (\code{"cuminc"}), the default option, defined as 1 minus the cumulative incidence ratio (treatment/control) and estimated by the transformation of the Nelson-Aalen estimator for the cumulative hazard function; and (2) hazard-based VE (\code{"cox"}), where VE is defined as 1 minus the hazard ratio (treatment/control) and estimated by the maximum partial likelihood estimator in the Cox model with treatment as a sole covariate.}
-
-\item{nonEffEst}{a character string specifying the choice of VE estimand(s) used in interim non- and high efficacy monitoring. Three options are implemented: (1) the combined approach (\code{"combined"}), the default option, which considers monitoring based on both \code{effEst} VE estimands and their respective estimators; (2) \code{"cuminc"}) as introduced for \code{effEst}; and (3) \code{"cox"} as introduced for \code{effEst}.}
-
 \item{nonEffStartMethod}{a character string specifying the method used for determining when non-efficacy monitoring is to start. The default method of Freidlin, Korn, and Gray (2010) ("\code{FKG}") calculates the minimal pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) such that a hazard-ratio-based VE point estimate of 0\% would result in declaring non-efficacy, i.e., the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval for VE based on the asymptotic variance of the log-rank statistic equals the non-efficacy threshold specified as component \code{upperVEnonEff} in the list \code{nonEffStartParams}. If this list component is left unspecified, the argument \code{upperVEnonEff} is used as the non-efficacy threshold. The alternative method ("\code{fixed}") starts non-efficacy monitoring at a fixed pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) specified by component \code{N1} in the list \code{nonEffStartParams}.}
 
 \item{nonEffStartParams}{a list with named components specifying parameters required by \code{nonEffStartMethod} (\code{NULL} by default)}
@@ -59,9 +55,9 @@ monitorTrial(
 
 \item{nonEffInterval}{a numeric vector (a number of infections or a number of weeks) specifying the timing of non-efficacy interim analyses. If a single numeric value is specified, then all interim looks are equidistant (in terms of the number of infections or weeks), and the value specifies the constant increment of information or time between two adjacent interim looks. If a numeric vector with at least two components is specified, then, following the initial interim look, the timing of subsequent interim looks is determined by (potentially differential) increments of information or time specified by this vector.}
 
-\item{lowerVEnoneff}{specifies criterion 1 for declaring non-efficacy: the lower bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{lowerVEnoneff} (typically set equal to 0). If \code{NULL} (default), this criterion is ignored.}
+\item{nonEffCohorts}{a list of lists specifying all cohorts used in non-efficacy monitoring. The internal lists must be named \code{cohort1}, \code{cohort2}, etc. Each cohort's list must contain a component named \code{estimand}, which can take in values \code{"cox"}, \code{"cuminc"}, or \code{"combined"}. Optional list components are \code{lagTime} and \code{cohortInd}. The former specifies a lag time that controls event inclusion for the cohort. If no lag time is desired, then this component can be ignored, set to \code{NULL}, or set to 0. The latter is a character string naming an indicator variable included in the data frames outputted by \code{\link{simTrial}} to be used to subset participants to the desired cohort. This component allows inclusion of, e.g., a "per-protocol" variable. The default set-up monitors one cohort, with \code{estimand} set to \code{"cox"} and \code{lagTime} defaulting to \code{nonEffTimeLag}.}
 
-\item{upperVEnoneff}{specifies criterion 2 for declaring non-efficacy: the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{upperVEnoneff} (typically a number in the 0--0.5 range)}
+\item{lowerVEnoneff}{specifies criterion 1 for declaring non-efficacy: the lower bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{lowerVEnoneff} (typically set equal to 0). If \code{NULL} (default), this criterion is ignored.}
 
 \item{highVE}{specifies a criterion for declaring high-efficacy: the lower bound of the two-sided (1-\code{alphaHigh}) x 100\% confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range). To turn off high efficacy monitoring, set \code{highVE} equal to 1.}
 
@@ -69,23 +65,27 @@ monitorTrial(
 
 \item{lowerVEuncPower}{a numeric vector with each component specifying a one-sided null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\%. Unconditional power (i.e., accounting for sequential monitoring) to reject each H0 is calculated, where the rejection region is defined by the lower bound of the two-sided (1-\code{alphaUncPower}) x 100\% confidence interval for the VE estimand being above the respective component of \code{lowerVEuncPower} (typically values in the 0--0.5 range).}
 
-\item{alphaNoneff}{one minus the nominal confidence level of the two-sided confidence interval used for non-efficacy monitoring}
-
 \item{alphaHigh}{one minus the nominal confidence level of the two-sided confidence interval used for high efficacy monitoring}
 
 \item{alphaStage1}{one minus the nominal confidence level of the two-sided confidence interval used for determining whether a treatment's evaluation advances into Stage 2}
 
 \item{alphaUncPower}{one minus the nominal confidence level of the two-sided confidence interval used to test one-sided null hypotheses H0: VE(0-\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\% against alternative hypotheses H1: VE(0--\code{stage1}) \eqn{>} \code{lowerVEuncPower} x 100\%. The same nominal confidence level is applied for each component of \code{lowerVEuncPower}.}
 
-\item{laggedMonitoring}{a logical value (\code{FALSE} by default) indicating whether "per-protocol" non-efficacy monitoring should additionally be conducted for events occurring after \code{lagTime} weeks as a more conservative non-efficacy monitoring approach. If \code{TRUE} and \code{estimand = "combined"}, the cumulative VE estimand is considered only for non-efficacy monitoring.}
-
-\item{lagTime}{a time point (in weeks) defining the per-protocol VE estimand, i.e., VE(\code{lagTime}--\code{stage1}). This VE estimand is also used in "per-protocol" non-efficacy monitoring if \code{laggedMonitoring} equals \code{TRUE}. It is typically chosen as the date of the last immunization or the date of the visit following the last immunization.}
-
 \item{saveFile}{a character string specifying the name of the output \code{.RData} file. If \code{NULL} (default), a default file name will be used.}
 
 \item{saveDir}{a character string specifying a path for \code{dataFile}. If supplied, the output is also saved as an \code{.RData} file in this directory; otherwise the output is returned as a list.}
 
 \item{verbose}{a logical value indicating whether information on the output directory, file name, and monitoring outcomes should be printed out (default is \code{TRUE})}
+
+\item{nonEffTimes}{a numeric vector that allows the user to specify time points of non-efficacy interim looks. The "times" provided can either be in terms of 'calendar time' - the time (in weeks) since the trial started - or in terms of event counts. If counts are provided, and \code{laggedMonitoring=TRUE}, then the counts will be interpreted as "lagged counts", i.e., events that occurred after \code{lagTime} weeks of follow-up.  The unit of time for \code{nonEffTimes} is specified by \code{nonEffTimeUnit}.}
+
+\item{nonEffTimeUnit}{a character string specifying the unit of measurument for the values provided in \code{nonEffTimes}.  Possible values are \code{"counts"} (default) and \code{"time"}.}
+
+\item{nonEffTimeLag}{a time (in weeks) specifying the time lag for determining time points of non-efficacy interim looks. If specified and \code{nonEffTimes} is specifies on the event count scale, only events occurring after \code{nonEffTimeLag} weeks are counted towards the events in \code{nonEffTimes}. Default is \code{NULL}.}
+
+\item{upperVEnoneff}{specifies criterion 2 for declaring non-efficacy: the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{upperVEnoneff} (typically a number in the 0--0.5 range)}
+
+\item{alphaNoneff}{one minus the nominal confidence level of the two-sided confidence interval used for non-efficacy monitoring}
 }
 \value{
 If \code{saveDir} (and, optionally \code{saveFile}) is specified, the output list (named \code{out}) is saved as an \code{.RData} file in \code{saveDir} (the path to \code{saveDir} is printed); otherwise it is returned. The output object is a list of length equal to the number of simulated trials, each of which is a list of length equal to the number of treatment arms, each of which is a list with (at least) the following components:

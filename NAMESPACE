@@ -2,6 +2,7 @@
 
 export(VEpowerPP)
 export(censTrial)
+export(estHRbound)
 export(getBlockSize)
 export(monitorTrial)
 export(rankTrial)
