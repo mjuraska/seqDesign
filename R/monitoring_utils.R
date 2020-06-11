@@ -986,7 +986,7 @@ censorTrial <- function(d, times, arms=NULL, timeScale=c("calendar","follow-up")
 # equation to be solved
 # all arguments are scalars to have a single equation
 eqEstHR <- function(hr, boundType, nullHR, alpha, nEvents, p){
-  confLim <- log(hr) + ifelse(boundType=="eff", 1, -1) * pnorm(1 - alpha / 2) * 
+  confLim <- log(hr) + ifelse(boundType=="eff", 1, -1) * qnorm(1 - alpha / 2) * 
     sqrt((1 / nEvents) * (2 + p * hr / (1 - p) + (1 - p) / (p * hr)))
   return(confLim - log(nullHR))
 }
@@ -995,7 +995,7 @@ eqEstHR <- function(hr, boundType, nullHR, alpha, nEvents, p){
 # all arguments are scalars to solve a single equation
 getEstHR <- function(boundType, nullHR, alpha, nEvents, randFrac){
   
-  int <- if (boundType=="eff"){ c(0.01, nullHR) } else { c(nullHR, 5) }
+  int <- if (boundType=="eff"){ c(0.05, nullHR) } else { c(nullHR, 5) }
   estHR <- uniroot(eqEstHR, interval=int, boundType=boundType, nullHR=nullHR, alpha=alpha, nEvents=nEvents, p=randFrac)
   return(estHR$root)
 }
