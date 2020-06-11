@@ -983,3 +983,41 @@ censorTrial <- function(d, times, arms=NULL, timeScale=c("calendar","follow-up")
   }
 }
 
+# equation to be solved
+# all arguments are scalars to have a single equation
+eqEstHR <- function(hr, boundType, nullHR, alpha, nEvents, p){
+  confLim <- log(hr) + ifelse(boundType=="eff", 1, -1) * pnorm(1 - alpha / 2) * 
+    sqrt((1 / nEvents) * (2 + p * hr / (1 - p) + (1 - p) / (p * hr)))
+  return(confLim - log(nullHR))
+}
+
+# get the root of 'eqEstHR' wrt its first argument
+# all arguments are scalars to solve a single equation
+getEstHR <- function(boundType, nullHR, alpha, nEvents, randFrac){
+  
+  int <- if (boundType=="eff"){ c(0.01, nullHR) } else { c(nullHR, 5) }
+  estHR <- uniroot(eqEstHR, interval=int, boundType=boundType, nullHR=nullHR, alpha=alpha, nEvents=nEvents, p=randFrac)
+  return(estHR$root)
+}
+
+# Computes the HR (group 1 / group 2) estimates at the boundary
+#
+# boundType - boundary type (either "eff" or "nonEff")
+# nullHR    - the null hypothesis value of the HR parameter
+# alpha     - a vector of two-sided nominal significance levels
+# nEvents   - a vector of the total number of events at each analysis (components match those of 'nEvents')
+# randFrac  - randomization fraction for group 1
+estHRbound <- function(boundType=c("eff", "nonEff"), nullHR, alpha, nEvents, randFrac){
+  if (length(alpha)!=length(nEvents)){
+    stop("The arguments 'alpha' and 'nEvents' must be of equal length.")
+  }
+  
+  boundType <- match.arg(boundType)
+  
+  estHR <- NULL
+  for (i in 1:length(alpha)){
+    estHR <- c(estHR, getEstHR(boundType, nullHR, alpha[i], nEvents[i], randFrac))
+  }
+  
+  return(estHR)
+}
