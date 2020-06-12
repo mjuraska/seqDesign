@@ -1005,7 +1005,7 @@ getEstHR <- function(boundType, nullHR, alpha, nEvents, randFrac){
 #' 
 #' Assuming an exponential survival model, hazard ratios are estimated at an efficacy or non-efficacy stopping boundary, defined using the Wald CI approach, at each group-sequential analysis.
 #' 
-#' @param boundType a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \leq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \geq \theta_0} (\code{"nonEff"}), where \eqn{\theta} is the hazard ratio and \eqn{\theta_0} is specified by \code{nullHR}
+#' @param boundType a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \geq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \leq \theta_0} (\code{"nonEff"}), where \eqn{\theta} is the hazard ratio and \eqn{\theta_0} is specified by \code{nullHR}
 #' @param nullHR a nonnegative numeric value specifying the hazard ratio, \eqn{\theta_0}, under the null hypothesis
 #' @param alpha a numeric vector of nominal significance levels (e.g., those defined by the O'Brien-Fleming group-sequential test)
 #' @param nEvents a numeric vector of numbers of events at which analyses is performed. The lengths of \code{alpha} and \code{nEvents} must be the same, and the components of the two vectors must correspond to each other.
@@ -1019,12 +1019,12 @@ getEstHR <- function(boundType, nullHR, alpha, nEvents, randFrac){
 #' @return A numeric vector (of the same length as \code{alpha} and \code{nEvents}) of hazard ratio estimates.
 #' 
 #' @examples
-#' ## O'Brien-Fleming test of H0: HR <= 0.7 (for efficacy) at 
+#' ## O'Brien-Fleming test of H0: HR >= 0.7 (for efficacy) at 
 #' ## 35%, 70%, and 100% of the total information under 1:1 randomization
 #' estHRbound("eff", nullHR=0.7, alpha=c(0.00030, 0.01466, 0.04548), 
 #'            nEvents=c(53, 106, 151), randFrac=0.5)
 #' 
-#' ## O'Brien-Fleming test of H0: HR >= 0.5 (for non-efficacy) at
+#' ## O'Brien-Fleming test of H0: HR <= 0.5 (for non-efficacy) at
 #' ## 35%, 70%, and 100% of the total information under 1:1 randomization
 #' estHRbound("nonEff", nullHR=0.5, alpha=c(0.00030, 0.01466, 0.04548), 
 #'            nEvents=c(53, 106, 151), randFrac=0.5)

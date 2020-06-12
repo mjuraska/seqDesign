@@ -7,7 +7,7 @@
 estHRbound(boundType = c("eff", "nonEff"), nullHR, alpha, nEvents, randFrac)
 }
 \arguments{
-\item{boundType}{a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \leq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \geq \theta_0} (\code{"nonEff"}), where \eqn{\theta} is the hazard ratio and \eqn{\theta_0} is specified by \code{nullHR}}
+\item{boundType}{a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \geq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \leq \theta_0} (\code{"nonEff"}), where \eqn{\theta} is the hazard ratio and \eqn{\theta_0} is specified by \code{nullHR}}
 
 \item{nullHR}{a nonnegative numeric value specifying the hazard ratio, \eqn{\theta_0}, under the null hypothesis}
 
@@ -30,12 +30,12 @@ The resultant variance approximation is \eqn{\mathrm{var} \{\log \widehat{\theta
 where \eqn{D} is the total number of events and \eqn{p} is the randomization fraction \code{randFrac}.
 }
 \examples{
-## O'Brien-Fleming test of H0: HR <= 0.7 (for efficacy) at 
+## O'Brien-Fleming test of H0: HR >= 0.7 (for efficacy) at 
 ## 35\%, 70\%, and 100\% of the total information under 1:1 randomization
 estHRbound("eff", nullHR=0.7, alpha=c(0.00030, 0.01466, 0.04548), 
            nEvents=c(53, 106, 151), randFrac=0.5)
 
-## O'Brien-Fleming test of H0: HR >= 0.5 (for non-efficacy) at
+## O'Brien-Fleming test of H0: HR <= 0.5 (for non-efficacy) at
 ## 35\%, 70\%, and 100\% of the total information under 1:1 randomization
 estHRbound("nonEff", nullHR=0.5, alpha=c(0.00030, 0.01466, 0.04548), 
            nEvents=c(53, 106, 151), randFrac=0.5)
