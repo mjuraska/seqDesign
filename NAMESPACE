@@ -3,6 +3,7 @@
 export(VEpowerPP)
 export(censTrial)
 export(crossBoundCumProb)
+export(decisionTimes)
 export(estHRbound)
 export(getBlockSize)
 export(monitorTrial)

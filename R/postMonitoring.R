@@ -1,6 +1,6 @@
 # Functions to post-process data after running monitorTrial.
 # Included Functions:
-#   censTrial, rankTrial, testVE, headTestVE, buildBounds, VEpowerPP
+#   censTrial, rankTrial, testVE, headTestVE, buildBounds, VEpowerPP, crossBoundCumProb
 
 
 #' Generation of Pre-Unblinded Follow-Up Data-Sets by Applying the Monitoring Outcomes
@@ -763,5 +763,167 @@ VEpowerPP <- function( dataList,
   }  
 }
 
+#' Estimate cumulative probabilities of crossing an efficacy or non-efficacy boundary in an event-driven 2-arm trial design
+#' 
+#' Computes proportions of simulated trials that crossed either an efficacy or a non-efficacy stopping boundary by analysis \eqn{1,\ldots,\code{nAnalyses}} using an \code{.RData} output file from \code{\link{monitorTrial}}. An event-driven 2-arm trial design is assumed.
+#' 
+#' @param boundType a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \geq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \leq \theta_0} (\code{"nonEff"}), where \eqn{\theta} and \eqn{\theta_0} are the true hazard ratio and its value specifying the null hypothesis, respectively
+#' @param nAnalyses a numeric value specifying the number of analyses
+#' @param monitorTrialFile either a character string specifying an \code{.RData} file or a list outputted by \code{\link{monitorTrial}}
+#' @param monitorTrialDir a character string specifying a path to \code{monitorTrialFile} if \code{monitorTrialFile} specifies a file name
+#' 
+#' @return A numeric vector of estimated cumulative probabilities of crossing the specified boundary by analysis \eqn{1,\ldots,\code{nAnalyses}}.
+#' 
+#' @examples
+#' simData <- simTrial(N=c(1000, 1000), aveVE=c(0, 0.4),
+#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78,
+#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05,
+#'                     infecRate=0.6, fuTime=156,
+#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+#'                     missVaccProb=0.05, VEcutoffWeek=26, nTrials=5,
+#'                     stage1=78, randomSeed=300)
+#' 
+#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
+#'                             harmMonitorRange=c(10,75), harmMonitorAlpha=0.05,
+#'                             effCohort=list(timingCohort=list(lagTime=0),
+#'                                            times=c(75, 150),
+#'                                            timeUnit="counts",
+#'                                            lagTime=0,
+#'                                            estimand="cox",
+#'                                            nullVE=0,
+#'                                            nominalAlphas=c(0.001525, 0.024501)),
+#'                             nonEffCohorts=list(timingCohort=list(lagTime=0),
+#'                                                times=c(75, 150),
+#'                                                timeUnit="counts",
+#'                                                cohort1=list(lagTime=0,
+#'                                                             estimand="cox",
+#'                                                             nullVE=0.4,
+#'                                                             nominalAlphas=c(0.001525, 0.024501))),
+#'                             lowerVEnoneff=0, highVE=1, lowerVEuncPower=0,
+#'                             alphaHigh=0.05, alphaUncPower=0.05,
+#'                             verbose=FALSE)
+#' 
+#' crossBoundCumProb(boundType="eff", nAnalyses=2, monitorTrialFile=monitorData)
+#' crossBoundCumProb(boundType="nonEff", nAnalyses=2, monitorTrialFile=monitorData)
+#'
+#' @export
+crossBoundCumProb <- function(boundType=c("eff", "nonEff"), nAnalyses, monitorTrialFile, monitorTrialDir=NULL){
+  boundType <- match.arg(boundType)
+  
+  if (is.character(monitorTrialFile)){
+    if (is.character(monitorTrialDir)){
+      # load an RData file (a list named 'out')
+      load(file.path(monitorTrialDir, monitorTrialFile))  
+    } else {
+      # load an RData file (a list named 'out')
+      load(monitorTrialFile)  
+    }
+  } else if (is.list(monitorTrialFile)){
+    out <- monitorTrialFile
+  }
+  
+  if (boundType=="eff"){
+    # identify the efficacy outcomes and return the number of the test at which the
+    # efficacy boundary was crossed
+    effCross <- sapply(out, function(x){
+      ifelse(x[[1]]$boundHit=="Eff", NROW(x[[1]]$summEff), NA)
+    })
+    effCross <- factor(effCross, levels=1:nAnalyses)
+    
+    return(cumsum(as.vector(table(effCross)) / length(out)))
+  } else {
+    # identify the non-efficacy outcomes and return the number of the test at which the
+    # efficacy boundary was crossed
+    noneffCross <- sapply(out, function(x){
+      ifelse(x[[1]]$boundHit=="NonEffInterim", if (is.data.frame(x[[1]]$summObj)) NROW(x[[1]]$summObj) else NROW(x[[1]]$summObj[[1]]), NA)
+    })
+    noneffCross <- factor(noneffCross, levels=1:nAnalyses)
+    
+    return(cumsum(as.vector(table(noneffCross)) / length(out)))
+  }
+}
 
-
+#' Extract the time since trial start to crossing a stopping boundary or reaching the target number of events if no stopping boundary crossed in an event-driven 2-arm trial design
+#' 
+#' Obtains times (in weeks) since trial initiation to crossing a harm, non-efficacy or efficacy boundary, or reaching the target number of events if no stopping boundary is crossed in an event-driven 2-arm trial design. The times are extracted from \code{.RData} files outputted by \code{\link{monitorTrial}}.
+#' 
+#' @param monitorTrialFile either a character vector specifying (multiple) \code{.RData} file(s) or a list of lists outputted by \code{\link{monitorTrial}}
+#' @param monitorTrialDir a character string specifying a path to the file(s) in \code{monitorTrialFile} if \code{monitorTrialFile} specifies file name(s)
+#' @param saveFile a character string optionally specifying an \code{.RData} file name storing the output (\code{NULL} by default)
+#' @param saveDir a character string optionally specifying the file path for \code{saveFile} (set to \code{monitorTrialDir} by default)
+#' 
+#' @return A list (of the same length as \code{monitorTrialFile}) of numeric vectors of times. The order of the vectors matches the order of components in \code{monitorTrialFile}. The length of each vector equals the number of simulated trials in the corresponding output list from \code{\link{monitorTrial}}.
+#' 
+#' @examples
+#' simData <- simTrial(N=c(1000, 1000), aveVE=c(0, 0.4),
+#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78,
+#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05,
+#'                     infecRate=0.6, fuTime=156,
+#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+#'                     missVaccProb=0.05, VEcutoffWeek=26, nTrials=5,
+#'                     stage1=78, randomSeed=300)
+#' 
+#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
+#'                             harmMonitorRange=c(10,75), harmMonitorAlpha=0.05,
+#'                             effCohort=list(timingCohort=list(lagTime=0),
+#'                                            times=c(75, 150),
+#'                                            timeUnit="counts",
+#'                                            lagTime=0,
+#'                                            estimand="cox",
+#'                                            nullVE=0,
+#'                                            nominalAlphas=c(0.001525, 0.024501)),
+#'                             nonEffCohorts=list(timingCohort=list(lagTime=0),
+#'                                                times=c(75, 150),
+#'                                                timeUnit="counts",
+#'                                                cohort1=list(lagTime=0,
+#'                                                             estimand="cox",
+#'                                                             nullVE=0.4,
+#'                                                             nominalAlphas=c(0.001525, 0.024501))),
+#'                             lowerVEnoneff=0, highVE=1, lowerVEuncPower=0,
+#'                             alphaHigh=0.05, alphaUncPower=0.05,
+#'                             verbose=FALSE)
+#' 
+#' times <- decisionTimes(list(monitorData))
+#' 
+#' ## alternatively, to save the .RData output file (no '<-' needed):
+#' ## decisionTimes(list(monitorData), saveFile="decisionTimes.RData")
+#' 
+#' @export
+decisionTimes <- function(monitorTrialFile, monitorTrialDir=NULL, saveFile=NULL, saveDir=monitorTrialDir){
+  times <- vector("list", length(monitorTrialFile))
+  
+  for (i in 1:length(monitorTrialFile)){
+    
+    if (is.character(monitorTrialFile)){
+      if (is.character(monitorTrialDir)){
+        # load an RData file (a list named 'out')
+        load(file.path(monitorTrialDir, monitorTrialFile[i]))  
+      } else {
+        # load an RData file (a list named 'out')
+        load(monitorTrialFile[i])  
+      }
+    } else if (is.list(monitorTrialFile)){
+      out <- monitorTrialFile[[i]]
+    }
+    
+    out <- lapply(out, "[[", 1)
+    
+    times[[i]] <- sapply(out, function(x){
+      if (is.na(x$boundHit) || x$boundHit=="Eff"){
+        return(max(x$summEff$testTimes))
+      } else {
+        return(x$stopTime) 
+      }
+    })
+  }
+  
+  if (is.character(saveFile)){
+    if (is.character(saveDir)){
+      save(times, file=file.path(saveDir, saveFile))
+    } else {
+      save(times, file=saveFile)
+    }
+  }
+  
+  return(invisible(times))
+}

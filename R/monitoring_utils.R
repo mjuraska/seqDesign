@@ -1001,9 +1001,9 @@ getEstHR <- function(boundType, nullHR, alpha, nEvents, randFrac){
   return(estHR$root)
 }
 
-#' Estimate hazard ratios at an efficacy or non-efficacy stopping boundary defined using the Wald CI approach
+#' Estimate hazard ratios at an efficacy or non-efficacy stopping boundary defined using the Wald CI approach in an event-driven 2-arm trial design
 #' 
-#' Assuming an exponential survival model, hazard ratios are estimated at an efficacy or non-efficacy stopping boundary, defined using the Wald CI approach, at each group-sequential analysis.
+#' Assuming an exponential survival model, hazard ratios are estimated at an efficacy or non-efficacy stopping boundary, defined using the Wald CI approach, at each group-sequential analysis in an event-driven 2-arm trial design.
 #' 
 #' @param boundType a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \geq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \leq \theta_0} (\code{"nonEff"}), where \eqn{\theta} is the hazard ratio and \eqn{\theta_0} is specified by \code{nullHR}
 #' @param nullHR a nonnegative numeric value specifying the hazard ratio, \eqn{\theta_0}, under the null hypothesis
@@ -1045,77 +1045,3 @@ estHRbound <- function(boundType=c("eff", "nonEff"), nullHR, alpha, nEvents, ran
   return(estHR)
 }
 
-#' Estimate cumulative probabilities of crossing an efficacy or non-efficacy boundary
-#' 
-#' Computes proportions of simulated trials that crossed either an efficacy or a non-efficacy stopping boundary by analysis \eqn{1,\ldots,\code{nAnalyses}} using an \code{.RData} output file from \code{\link{monitorTrial}}.
-#' 
-#' @param boundType a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \geq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \leq \theta_0} (\code{"nonEff"}), where \eqn{\theta} and \eqn{\theta_0} are the true hazard ratio and its value specifying the null hypothesis, respectively
-#' @param nAnalyses a numeric value specifying the number of analyses
-#' @param monitorTrialFile either a character string specifying an \code{.RData} file or a list outputted by \code{\link{monitorTrial}}
-#' @param monitorTrialDir a character string specifying a path to \code{monitorTrialFile} if \code{monitorTrialFile} specifies a file name
-#' 
-#' @return A numeric vector of estimated cumulative probabilities of crossing the specified boundary by analysis \eqn{1,\ldots,\code{nAnalyses}}.
-#' 
-#' @examples
-#' simData <- simTrial(N=c(1000, 1000), aveVE=c(0, 0.4),
-#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78,
-#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05,
-#'                     infecRate=0.6, fuTime=156,
-#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
-#'                     missVaccProb=0.05, VEcutoffWeek=26, nTrials=5,
-#'                     stage1=78, randomSeed=300)
-#' 
-#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
-#'                             harmMonitorRange=c(10,75), harmMonitorAlpha=0.05,
-#'                             effCohort=list(timingCohort=list(lagTime=0),
-#'                                            times=c(75, 150),
-#'                                            timeUnit="counts",
-#'                                            lagTime=0,
-#'                                            estimand="cox",
-#'                                            nullVE=0,
-#'                                            nominalAlphas=c(0.001525, 0.024501)),
-#'                             nonEffCohorts=list(timingCohort=list(lagTime=0),
-#'                                                times=c(75, 150),
-#'                                                timeUnit="counts",
-#'                                                cohort1=list(lagTime=0,
-#'                                                             estimand="cox",
-#'                                                             nullVE=0.4,
-#'                                                             nominalAlphas=c(0.001525, 0.024501))),
-#'                             lowerVEnoneff=0, highVE=1, lowerVEuncPower=0,
-#'                             alphaHigh=0.05, alphaUncPower=0.05,
-#'                             verbose=FALSE)
-#' 
-#' crossBoundCumProb(boundType="eff", nAnalyses=2, monitorTrialFile=monitorData)
-#' crossBoundCumProb(boundType="nonEff", nAnalyses=2, monitorTrialFile=monitorData)
-#'
-#' @export
-crossBoundCumProb <- function(boundType=c("eff", "nonEff"), nAnalyses, monitorTrialFile, monitorTrialDir=NULL){
-  boundType <- match.arg(boundType)
-  
-  if (is.character(monitorTrialFile) && is.character(monitorTrialDir)){
-    # load an RData file (a list named 'out')
-    load(file.path(monitorTrialDir, monitorTrialFile))
-  } else if (is.list(monitorTrialFile)){
-    out <- monitorTrialFile
-  }
-  
-  if (boundType=="eff"){
-    # identify the efficacy outcomes and return the number of the test at which the
-    # efficacy boundary was crossed
-    effCross <- sapply(out, function(x){
-      ifelse(x[[1]]$boundHit=="Eff", NROW(x[[1]]$summEff), NA)
-    })
-    effCross <- factor(effCross, levels=1:nAnalyses)
-    
-    return(cumsum(as.vector(table(effCross)) / length(out)))
-  } else {
-    # identify the non-efficacy outcomes and return the number of the test at which the
-    # efficacy boundary was crossed
-    noneffCross <- sapply(out, function(x){
-      ifelse(x[[1]]$boundHit=="NonEffInterim", if (is.data.frame(x[[1]]$summObj)) NROW(x[[1]]$summObj) else NROW(x[[1]]$summObj[[1]]), NA)
-      })
-    noneffCross <- factor(noneffCross, levels=1:nAnalyses)
-    
-    return(cumsum(as.vector(table(noneffCross)) / length(out)))
-  }
-}

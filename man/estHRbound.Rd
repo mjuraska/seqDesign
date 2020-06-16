@@ -2,7 +2,7 @@
 % Please edit documentation in R/monitoring_utils.R
 \name{estHRbound}
 \alias{estHRbound}
-\title{Estimate hazard ratios at an efficacy or non-efficacy stopping boundary defined using the Wald CI approach}
+\title{Estimate hazard ratios at an efficacy or non-efficacy stopping boundary defined using the Wald CI approach in an event-driven 2-arm trial design}
 \usage{
 estHRbound(boundType = c("eff", "nonEff"), nullHR, alpha, nEvents, randFrac)
 }
@@ -21,7 +21,7 @@ estHRbound(boundType = c("eff", "nonEff"), nullHR, alpha, nEvents, randFrac)
 A numeric vector (of the same length as \code{alpha} and \code{nEvents}) of hazard ratio estimates.
 }
 \description{
-Assuming an exponential survival model, hazard ratios are estimated at an efficacy or non-efficacy stopping boundary, defined using the Wald CI approach, at each group-sequential analysis.
+Assuming an exponential survival model, hazard ratios are estimated at an efficacy or non-efficacy stopping boundary, defined using the Wald CI approach, at each group-sequential analysis in an event-driven 2-arm trial design.
 }
 \details{
 Using an exponential survival model and sample estimates \eqn{\widehat{\lambda}_1} and \eqn{\widehat{\lambda}_2} of the group-specific hazard rates, the asymptotic variance of the log hazard ratio estimator 
