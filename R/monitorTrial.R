@@ -21,10 +21,10 @@
 #' @param lowerVEnoneff specifies an additional criterion for declaring non-efficacy if the hypothesis test is based on Wald confidence interval(s). It requires that the lower bound of the two-sided Wald CI(s) for the VE estimand(s), at the confidence level determined by \code{nonEffCohorts$cohort1$nominalAlphas}, etc., lie(s) below \code{lowerVEnoneff} (typically set equal to 0). If \code{NULL} (default), this criterion is ignored.
 #' @param highVE specifies a criterion for declaring high-efficacy: the lower bound of the two-sided \eqn{(1-\code{alphaHigh}) 100\%} confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range). To turn off high efficacy monitoring, set \code{highVE} equal to 1.
 #' @param stage1VE specifies a criterion for advancement of a treatment's evaluation into Stage 2: the lower bound of the two-sided \eqn{(1-\code{alphaStage1}) 100\%} confidence interval for the VE estimand lies above \code{stage1VE} (typically set equal to 0)
-#' @param lowerVEuncPower a numeric vector with each component specifying a one-sided null hypothesis \eqn{H0: VE(0--\code{stage1}) \leq \code{lowerVEuncPower} 100\%}. Unconditional power (i.e., accounting for sequential monitoring) to reject each H0 is calculated, where the rejection region is defined by the lower bound of the two-sided \eqn{(1-\code{alphaUncPower}) 100\%} confidence interval for the VE estimand being above the respective component of \code{lowerVEuncPower} (typically values in the 0--0.5 range).
+#' @param lowerVEuncPower a numeric vector with each component specifying a one-sided null hypothesis \eqn{H_0: VE(0-\code{stage1}) \leq \code{lowerVEuncPower} \times 100\%}. Unconditional power (i.e., accounting for sequential monitoring) to reject each \eqn{H_0} is calculated, where the rejection region is defined by the lower bound of the two-sided \eqn{(1-\code{alphaUncPower}) 100\%} confidence interval for the VE estimand being above the respective component of \code{lowerVEuncPower} (typically values in the 0--0.5 range).
 #' @param alphaHigh one minus the nominal confidence level of the two-sided confidence interval used for high efficacy monitoring
 #' @param alphaStage1 one minus the nominal confidence level of the two-sided confidence interval used for determining whether a treatment's evaluation advances into Stage 2
-#' @param alphaUncPower one minus the nominal confidence level of the two-sided confidence interval used to test one-sided null hypotheses \eqn{H0: VE(0-\code{stage1}) \leq \code{lowerVEuncPower} 100\%} against alternative hypotheses \eqn{H1: VE(0--\code{stage1}) > \code{lowerVEuncPower} 100\%}. The same nominal confidence level is applied for each component of \code{lowerVEuncPower}.
+#' @param alphaUncPower one minus the nominal confidence level of the two-sided confidence interval used to test one-sided null hypotheses \eqn{H_0: VE(0-\code{stage1}) \leq \code{lowerVEuncPower} \times 100\%} against alternative hypotheses \eqn{H_1: VE(0-\code{stage1}) > \code{lowerVEuncPower} \times 100\%}. The same nominal confidence level is applied for each component of \code{lowerVEuncPower}.
 #' @param saveFile a character string specifying the name of the output \code{.RData} file. If \code{NULL} (default), a default file name will be used.
 #' @param saveDir a character string specifying a path for \code{dataFile}. If supplied, the output is also saved as an \code{.RData} file in this directory; otherwise the output is returned as a list.
 #' @param verbose a logical value indicating whether information on the output directory, file name, and monitoring outcomes should be printed out (default is \code{TRUE})
@@ -73,31 +73,71 @@
 #' @references Freidlin B., Korn E. L., and Gray R. (2010), A general inefficacy interim monitoring rule for randomized clinical trials. \emph{Clinical Trials} 7(3):197-208.
 #'
 #' @examples 
-#' simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2), 
-#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78, 
-#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05, 
-#'                     infecRate=0.04, fuTime=156, 
-#'                     visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
-#'                     missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
+#' simData <- simTrial(N=c(1000, 1000), aveVE=c(0, 0.4),
+#'                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78,
+#'                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05,
+#'                     infecRate=0.06, fuTime=156, visitSchedule=seq(0, 156, by=4),
+#'                     missVaccProb=0.05, VEcutoffWeek=26, nTrials=5,
 #'                     stage1=78, randomSeed=300)
-#'    
-#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
-#'                             harmMonitorRange=c(10,100), alphaPerTest=NULL, 
-#'                             nonEffStartMethod="FKG", nonEffInterval=20, 
-#'                             lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, 
-#'                             stage1VE=0, lowerVEuncPower=0, alphaNoneff=0.05,
-#'                             alphaHigh=0.05, alphaStage1=0.05, alphaUncPower=0.05,
-#'                             estimand="cuminc", lagTime=26)
+#'                     
+#' ### trial design: fixed follow-up; cumulative incidence-based VE estimand;
+#'                   no efficacy monitoring; non-efficacy monitoring using 
+#'                   the Freidlin et al. method; hypothesis tests based on Wald 
+#'                   confidence intervals
+#' ### RIGHT NOW, THE BELOW CALL IS BROKEN
+#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
+#'                             harmMonitorRange=c(10, NA), harmMonitorAlpha=0.05,
+#'                             nonEffStartMethod="FKG", nonEffInterval=20,
+#'                             nonEffCohorts=list(timeUnit="counts",
+#'                                                # right now 'timingCohort' is required
+#'                                                timingCohort=list(lagTime=0),
+#'                                                cohort1=list(estimand="cuminc",
+#'                                                             nullVE=0.4,
+#'                                                             nominalAlphas=0.025)),
+#'                             # it appears that right now 'effCohort' must be specified
+#'                             # even when there is no efficacy monitoring;
+#'                             # this call of monitorTrial() still doesn't run
+#'                             # because it requires event counts for timing
+#'                             effCohort=list(timeUnit="counts",
+#'                                            timingCohort=list(lagTime=0)),
+#'                             lowerVEnoneff=0, highVE=0.7, lowerVEuncPower=0, 
+#'                             alphaHigh=0.05, alphaUncPower=0.05)
+#'                             
+#' ### trial design: event-driven; hazard-based VE estimand;
+#'                   harmonized efficacy and non-efficacy monitoring; 
+#'                   hypothesis tests using the score test in the Cox model
+#' ### THE SCORE TEST OPTION NEEDS TO BE ADDED
+#' monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
+#'                             harmMonitorRange=c(10, 50), harmMonitorAlpha=0.05,
+#'                             nonEffCohorts=list(
+#'                               times=c(50, 100, 150),
+#'                               timeUnit="counts",
+#'                               timingCohort=list(lagTime=0),
+#'                               cohort1=list(estimand="cox",
+#'                                            nullVE=0.4,
+#'                                            nominalAlphas=c(0.0001, 0.0060, 0.0231))),
+#'                             effCohort=list(times=c(50, 100, 150),
+#'                                            timeUnit="counts",
+#'                                            timingCohort=list(lagTime=0),
+#'                                            estimand="cox",
+#'                                            nullVE=0,
+#'                                            nominalAlphas=c(0.0001, 0.0060, 0.0231)),
+#'                             highVE=1, lowerVEuncPower=0, 
+#'                             alphaHigh=0.05, alphaUncPower=0.05)
+
 #'    
 #' ### alternatively, to save the .RData output file (no '<-' needed):
 #' ###
-#' ### simTrial(N=c(1400, rep(1000, 2)), aveVE=seq(0, 0.4, by=0.2), VEmodel="half", 
-#' ###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
-#' ###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
-#' ###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
-#' ###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+#' ### simTrial(N=c(1000, 1000), aveVE=c(0, 0.4),
+#' ###          VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78,
+#' ###          enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05,
+#' ###          infecRate=0.06, fuTime=156, visitSchedule=seq(0, 156, by=4),
+#' ###          missVaccProb=0.05, VEcutoffWeek=26, nTrials=5,
 #' ###          stage1=78, saveDir="./", randomSeed=300)
 #' ###
+#' ### THIS CALL NEEDS TO BE REVISED TO A SIMPLE BUT WORKING CODE
+#' ### THE INTENT HERE IS ONLY TO ILLUSTRATE HOW OUTPUT FILES CAN BE READ IN
+#' ### THE PURPOSE IS NOT TO SHOW ANY ADDITIONAL TRIAL DESIGNS
 #' ### monitorTrial(dataFile=
 #' ###              "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
 #' ###              stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=NULL, 
@@ -106,7 +146,7 @@
 #' ###              alphaNoneff=0.05, alphaHigh=0.05, alphaStage1=0.05, alphaUncPower=0.05, 
 #' ###              estimand="cuminc", lagTime=26, saveDir="./")
 #'
-#' @seealso \code{\link{simTrial}}, \code{\link{censTrial}}, and \code{\link{rankTrial}}
+#' @seealso \code{\link{simTrial}}, \code{\link{censTrial}}, \code{\link{rankTrial}}, \code{\link{estHRbound}}, \code{\link{crossBoundCumProb}}, and \code{\link{decisionTimes}}
 #'
 #' @export
 monitorTrial <- function (dataFile,

@@ -30,8 +30,7 @@ Computes proportions of simulated trials that crossed either an efficacy or a no
 simData <- simTrial(N=c(1000, 1000), aveVE=c(0, 0.4),
                     VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78,
                     enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05,
-                    infecRate=0.6, fuTime=156,
-                    visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
+                    infecRate=0.06, fuTime=156, visitSchedule=seq(0, 156, by=4),
                     missVaccProb=0.05, VEcutoffWeek=26, nTrials=5,
                     stage1=78, randomSeed=300)
 
