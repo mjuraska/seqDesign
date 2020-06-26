@@ -996,9 +996,10 @@ eqEstHR <- function(hr, boundType, nullHR, alpha, nEvents, p){
 getEstHR <- function(boundType, nullHR, alpha, nEvents, randFrac){
   
   int <- if (boundType=="eff"){ c(0.05, nullHR) } else { c(nullHR, 5) }
-  estHR <- uniroot(eqEstHR, interval=int, boundType=boundType, nullHR=nullHR, 
-                   alpha=alpha, nEvents=nEvents, p=randFrac, tol=1e-9)
-  return(estHR$root)
+  estHR <- try(uniroot(eqEstHR, interval=int, boundType=boundType, nullHR=nullHR, 
+                       alpha=alpha, nEvents=nEvents, p=randFrac, tol=1e-9), silent=TRUE)
+  root <- ifelse(inherits(estHR, "try-error"), NA, estHR$root)
+  return(root)
 }
 
 #' Estimate hazard ratios at an efficacy or non-efficacy stopping boundary defined using the Wald CI approach in an event-driven 2-arm trial design
