@@ -11,75 +11,66 @@ monitorTrial(
   harmMonitorRange,
   harmMonitorAlpha = 0.05,
   alphaPerTest = NULL,
-  estimand = c("combined", "cox", "cuminc"),
-  effEst = c("cuminc", "cox"),
-  nonEffEst = c("combined", "cuminc", "cox"),
   nonEffStartMethod = c("FKG", "fixed", "?", "old"),
   nonEffStartParams = NULL,
   nonEffIntervalUnit = c("counts", "time"),
   nonEffInterval,
+  nonEffCohorts = list(times = NULL, timeUnit = "counts", timingCohort = list(lagTime =
+    NULL, cohortInd = NULL), cohort1 = list(estimand = "cox", lagTime = NULL, cohortInd =
+    NULL, nullVE = NULL, nominalAlphas = c(0.003, 0.0183, 0.044))),
+  effCohort = list(times = c(52, 77, 103), timeUnit = "counts", timingCohort =
+    list(lagTime = NULL, cohortInd = NULL), nullVE = 0.2, estimand = "cox", lagTime = 2,
+    cohortInd = "pp1", nominalAlphas = c(0.003, 0.0183, 0.044)),
   lowerVEnoneff = NULL,
-  upperVEnoneff,
   highVE,
   stage1VE,
   lowerVEuncPower = NULL,
-  alphaNoneff,
   alphaHigh,
   alphaStage1,
   alphaUncPower = NULL,
-  laggedMonitoring = FALSE,
-  lagTime = NULL,
   saveFile = NULL,
   saveDir = NULL,
   verbose = TRUE
 )
 }
 \arguments{
-\item{dataFile}{if \code{saveDir = NULL}, a list returned by \code{simTrial}; otherwise a name (character string) of an \code{.RData} file created by \code{simTrial}}
+\item{dataFile}{if \eqn{\code{saveDir} = \code{NULL}}, a list returned by \code{simTrial}; otherwise a name (character string) of an \code{.RData} file created by \code{simTrial}}
 
-\item{stage1}{the final week of stage 1 in a two-stage trial}
+\item{stage1}{the final week of stage 1 in a two-stage fixed-follow-up trial}
 
-\item{stage2}{the final week of stage 2 in a two-stage trial, i.e., the maximum follow-up time}
+\item{stage2}{the final week of stage 2 in a two-stage fixed-follow-up trial, i.e., the maximum total follow-up time}
 
-\item{harmMonitorRange}{a 2-component numeric vector specifying the range of the pooled number of infections (pooled over the placebo and vaccine arm accruing infections the fastest) over which the type I error rate, specified in \code{harmMonitorAlpha}, will be spent (per vaccine arm). Note that \code{harmMonitorRange} does not specify a range for which potential-harm stopping boundaries will be computed; instead, it specifies when potential-harm monitoring will start, and the range over which \code{harmMonitorAlpha} will be spent.}
+\item{harmMonitorRange}{a 2-component numeric vector specifying the range of the pooled number of events (pooled over the placebo and vaccine arm accruing events the fastest) over which the type I error rate, specified in \code{harmMonitorAlpha}, shall be spent (per vaccine arm). Note that \code{harmMonitorRange} does not specify a range over which potential-harm stopping boundaries will be computed; instead, it specifies when potential-harm monitoring will start, and the range over which the type I error rate \code{harmMonitorAlpha} will be spent. If \eqn{\code{nonEffStartMethod} = \code{"FKG"}} or \code{"fixed"}, then the second value is ignored and can be replaced with \code{NA}.}
 
 \item{harmMonitorAlpha}{a numeric value (0.05 by default) specifying the overall type I error rate for potential-harm monitoring (per vaccine arm). To turn off potential-harm monitoring, set \code{harmMonitorAlpha} equal to 0.00001.}
 
-\item{alphaPerTest}{a per-test nominal/unadjusted alpha level for potential-harm monitoring. If \code{NULL}, a per-test alpha level is calculated that yields a cumulative alpha of \code{harmMonitorAlpha} at the end of \code{harmMonitorRange}.}
+\item{alphaPerTest}{a per-test nominal significance level for potential-harm monitoring. If \code{NULL} (default), a per-test significance level is calculated that yields the overall type I error rate of \code{harmMonitorAlpha} at the end of \code{harmMonitorRange}.}
 
-\item{effEst}{a character string specifying the choice of VE estimand used in interim efficacy monitoring, final efficacy analysis, end-of-Stage-1 testing, and unconditional power calculations. Two options are implemented: (1) cumulative incidence-based VE (\code{"cuminc"}), the default option, defined as 1 minus the cumulative incidence ratio (treatment/control) and estimated by the transformation of the Nelson-Aalen estimator for the cumulative hazard function; and (2) hazard-based VE (\code{"cox"}), where VE is defined as 1 minus the hazard ratio (treatment/control) and estimated by the maximum partial likelihood estimator in the Cox model with treatment as a sole covariate.}
-
-\item{nonEffEst}{a character string specifying the choice of VE estimand(s) used in interim non- and high efficacy monitoring. Three options are implemented: (1) the combined approach (\code{"combined"}), the default option, which considers monitoring based on both \code{effEst} VE estimands and their respective estimators; (2) \code{"cuminc"}) as introduced for \code{effEst}; and (3) \code{"cox"} as introduced for \code{effEst}.}
-
-\item{nonEffStartMethod}{a character string specifying the method used for determining when non-efficacy monitoring is to start. The default method of Freidlin, Korn, and Gray (2010) ("\code{FKG}") calculates the minimal pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) such that a hazard-ratio-based VE point estimate of 0\% would result in declaring non-efficacy, i.e., the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval for VE based on the asymptotic variance of the log-rank statistic equals the non-efficacy threshold specified as component \code{upperVEnonEff} in the list \code{nonEffStartParams}. If this list component is left unspecified, the argument \code{upperVEnonEff} is used as the non-efficacy threshold. The alternative method ("\code{fixed}") starts non-efficacy monitoring at a fixed pooled infection count (pooled over the placebo and vaccine arm accruing infections the fastest) specified by component \code{N1} in the list \code{nonEffStartParams}.}
+\item{nonEffStartMethod}{a character string specifying the method used for determining when non-efficacy monitoring is to start. The default method of Freidlin, Korn, and Gray (2010) ("\code{FKG}") calculates the minimal pooled event count (pooled over the placebo and vaccine arm accruing events the fastest) such that a hazard-ratio-based VE point estimate of 0\% would result in declaring non-efficacy, i.e., the upper bound of the two-sided \eqn{(1-\code{alphaNoneff}) 100\%} confidence interval for VE based on the asymptotic variance of the log-rank statistic equals the non-efficacy threshold specified as component \code{upperVEnonEff} in the list \code{nonEffStartParams}. If this list component is left unspecified, the argument \code{upperVEnonEff} is used as the non-efficacy threshold. The alternative method ("\code{fixed}") starts non-efficacy monitoring at a fixed pooled event count (pooled over the placebo and vaccine arm accruing events the fastest) specified by component \code{N1} in the list \code{nonEffStartParams}.}
 
 \item{nonEffStartParams}{a list with named components specifying parameters required by \code{nonEffStartMethod} (\code{NULL} by default)}
 
 \item{nonEffIntervalUnit}{a character string specifying whether intervals between two adjacent non-efficacy interim analyses should be event-driven (default option "\code{counts}") or calendar time-driven (option "\code{time}")}
 
-\item{nonEffInterval}{a numeric vector (a number of infections or a number of weeks) specifying the timing of non-efficacy interim analyses. If a single numeric value is specified, then all interim looks are equidistant (in terms of the number of infections or weeks), and the value specifies the constant increment of information or time between two adjacent interim looks. If a numeric vector with at least two components is specified, then, following the initial interim look, the timing of subsequent interim looks is determined by (potentially differential) increments of information or time specified by this vector.}
+\item{nonEffInterval}{a numeric vector (a number of events or a number of weeks) specifying the timing of non-efficacy interim analyses. If a single numeric value is specified, then all interim looks are equidistant (in terms of the number of events or weeks), and the value specifies the constant increment of information or time between two adjacent interim looks. If a numeric vector with at least two components is specified, then, following the initial interim look, the timing of subsequent interim looks is determined by (potentially differential) increments of information or time specified by this vector.}
 
-\item{lowerVEnoneff}{specifies criterion 1 for declaring non-efficacy: the lower bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{lowerVEnoneff} (typically set equal to 0). If \code{NULL} (default), this criterion is ignored.}
+\item{nonEffCohorts}{a named list specifying all cohorts (for both timing and analysis) used in non-efficacy monitoring. The required list components characterize the 'timing cohort,' i.e., the cohort events in which determine the analysis timepoints in an event-driven design (components \code{times}, \code{timeUnit}, and \code{timingCohort}), and the analysis cohort(s), i.e., the cohort(s) in which inference is made about the null hypothesis of non-efficacy (component \code{cohort1} is required, and \code{cohort2}, etc. are optional for additional analysis cohorts if, e.g., non-efficacy monitoring is conducted in both the ITT and per-protocol cohorts). As for the timing cohort, \code{times} specifies the analysis timepoints in terms of event counts (\eqn{\code{timeUnit} = \code{"counts"}} is the only implemented option). \code{timingCohort} is a list characterizing the timing cohort by components \code{lagTime}, a lag time (in weeks) that controls event inclusion for timing (if no lag is desired, it can be set to \code{NULL} or 0), and \code{cohortInd}, a character string naming an indicator variable included in the data frames outputted by \code{\link{simTrial}}, which also controls event inclusion for the purpose of determining analysis timepoints. The other top-level list components \code{cohort1}, \code{cohort2}, etc. are each a list that must contain a component named \code{estimand}, which can take on values \code{"cox"}, \code{"cuminc"}, or \code{"combined"}. Optional list components in \code{cohort1}, \code{cohort2}, etc. are \code{lagTime}, \code{cohortInd}, \code{nullVE}, and \code{nominalAlphas}. \code{lagTime} specifies a lag time (in weeks) that controls event inclusion for the analysis cohort. If no lag time is desired, then this component can be ignored, set to \code{NULL}, or set to 0. \code{cohortInd} is a character string naming an indicator variable included in the data frames outputted by \code{\link{simTrial}} to be used to subset participants into the analysis cohort. This component allows inclusion of, e.g., a "per-protocol" variable (e.g., by setting \code{cohortInd} to \code{"pp1"}). \code{nullVE} specifies the one-sided null hypothesis as \eqn{H_0: VE \geq \code{nullVE}}. The rejection of \eqn{H_0} constitutes evidence for non-efficacy. \code{nominalAlphas} specifies nominal significance levels in a two-arm event-driven trial design.}
 
-\item{upperVEnoneff}{specifies criterion 2 for declaring non-efficacy: the upper bound of the two-sided (1-\code{alphaNoneff}) x 100\% confidence interval(s) for the VE estimand(s) lie(s) below \code{upperVEnoneff} (typically a number in the 0--0.5 range)}
+\item{effCohort}{a named list specifying the timing and analysis cohorts used in group-sequential efficacy monitoring (if part of the monitoring plan). The required list components characterize the 'timing cohort,' i.e., the cohort events in which determine the analysis timepoints in an event-driven design (components \code{times}, \code{timeUnit}, and \code{timingCohort}), and a single analysis cohort, i.e., the cohort in which inference is made about the null hypothesis of efficacy (components \code{estimand}, \code{lagTime}, \code{cohortInd}, \code{nullVE}, and \code{nominalAlphas}). As for the timing cohort, \code{times} specifies the analysis timepoints in terms of event counts (\eqn{\code{timeUnit} = \code{"counts"}} is the only implemented option). \code{timingCohort} is a list characterizing the timing cohort by components \code{lagTime}, a lag time (in weeks) that controls event inclusion for timing (if no lag is desired, it can be set to \code{NULL} or 0), and \code{cohortInd}, a character string naming an indicator variable included in the data frames outputted by \code{\link{simTrial}}, which also controls event inclusion for the purpose of determining analysis timepoints. As for the analysis cohort, \code{estimand} can take on values \code{"cox"}, \code{"cuminc"}, or \code{"combined"}. \code{lagTime} specifies a lag time (in weeks) that controls event inclusion for the analysis cohort. If no lag time is desired, then this component can be ignored, set to \code{NULL}, or set to 0. \code{cohortInd} is a character string naming an indicator variable included in the data frames outputted by \code{\link{simTrial}} to be used to subset participants into the analysis cohort. This component allows inclusion of, e.g., a "per-protocol" variable (e.g., by setting \code{cohortInd} to \code{"pp1"}). \code{nullVE} specifies the one-sided primary null hypothesis as \eqn{H_0: VE \leq \code{nullVE}}. The rejection of \eqn{H_0} constitues evidence for clinically relevant efficacy. \code{nominalAlphas} specifies nominal significance levels in a two-arm event-driven trial design.}
 
-\item{highVE}{specifies a criterion for declaring high-efficacy: the lower bound of the two-sided (1-\code{alphaHigh}) x 100\% confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range). To turn off high efficacy monitoring, set \code{highVE} equal to 1.}
+\item{lowerVEnoneff}{specifies an additional criterion for declaring non-efficacy if the hypothesis test is based on Wald confidence interval(s). It requires that the lower bound of the two-sided Wald CI(s) for the VE estimand(s), at the confidence level determined by \code{nonEffCohorts$cohort1$nominalAlphas}, etc., lie(s) below \code{lowerVEnoneff} (typically set equal to 0). If \code{NULL} (default), this criterion is ignored.}
 
-\item{stage1VE}{specifies a criterion for advancement of a treatment's evaluation into Stage 2: the lower bound of the two-sided (1-\code{alphaStage1}) x 100\% confidence interval for the VE estimand lies above \code{stage1VE} (typically set equal to 0)}
+\item{highVE}{specifies a criterion for declaring high-efficacy: the lower bound of the two-sided \eqn{(1-\code{alphaHigh}) 100\%} confidence interval for the VE estimand lies above \code{highVE} (typically a number in the 0.5--1 range). To turn off high efficacy monitoring, set \code{highVE} equal to 1.}
 
-\item{lowerVEuncPower}{a numeric vector with each component specifying a one-sided null hypothesis H0: VE(0--\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\%. Unconditional power (i.e., accounting for sequential monitoring) to reject each H0 is calculated, where the rejection region is defined by the lower bound of the two-sided (1-\code{alphaUncPower}) x 100\% confidence interval for the VE estimand being above the respective component of \code{lowerVEuncPower} (typically values in the 0--0.5 range).}
+\item{stage1VE}{specifies a criterion for advancement of a treatment's evaluation into Stage 2: the lower bound of the two-sided \eqn{(1-\code{alphaStage1}) 100\%} confidence interval for the VE estimand lies above \code{stage1VE} (typically set equal to 0)}
 
-\item{alphaNoneff}{one minus the nominal confidence level of the two-sided confidence interval used for non-efficacy monitoring}
+\item{lowerVEuncPower}{a numeric vector with each component specifying a one-sided null hypothesis \eqn{H_0: VE(0-\code{stage1}) \leq \code{lowerVEuncPower} \times 100\%}. Unconditional power (i.e., accounting for sequential monitoring) to reject each \eqn{H_0} is calculated, where the rejection region is defined by the lower bound of the two-sided \eqn{(1-\code{alphaUncPower}) 100\%} confidence interval for the VE estimand being above the respective component of \code{lowerVEuncPower} (typically values in the 0--0.5 range).}
 
 \item{alphaHigh}{one minus the nominal confidence level of the two-sided confidence interval used for high efficacy monitoring}
 
 \item{alphaStage1}{one minus the nominal confidence level of the two-sided confidence interval used for determining whether a treatment's evaluation advances into Stage 2}
 
-\item{alphaUncPower}{one minus the nominal confidence level of the two-sided confidence interval used to test one-sided null hypotheses H0: VE(0-\code{stage1}) \eqn{\le} \code{lowerVEuncPower} x 100\% against alternative hypotheses H1: VE(0--\code{stage1}) \eqn{>} \code{lowerVEuncPower} x 100\%. The same nominal confidence level is applied for each component of \code{lowerVEuncPower}.}
-
-\item{laggedMonitoring}{a logical value (\code{FALSE} by default) indicating whether "per-protocol" non-efficacy monitoring should additionally be conducted for events occurring after \code{lagTime} weeks as a more conservative non-efficacy monitoring approach. If \code{TRUE} and \code{estimand = "combined"}, the cumulative VE estimand is considered only for non-efficacy monitoring.}
-
-\item{lagTime}{a time point (in weeks) defining the per-protocol VE estimand, i.e., VE(\code{lagTime}--\code{stage1}). This VE estimand is also used in "per-protocol" non-efficacy monitoring if \code{laggedMonitoring} equals \code{TRUE}. It is typically chosen as the date of the last immunization or the date of the visit following the last immunization.}
+\item{alphaUncPower}{one minus the nominal confidence level of the two-sided confidence interval used to test one-sided null hypotheses \eqn{H_0: VE(0-\code{stage1}) \leq \code{lowerVEuncPower} \times 100\%} against alternative hypotheses \eqn{H_1: VE(0-\code{stage1}) > \code{lowerVEuncPower} \times 100\%}. The same nominal confidence level is applied for each component of \code{lowerVEuncPower}.}
 
 \item{saveFile}{a character string specifying the name of the output \code{.RData} file. If \code{NULL} (default), a default file name will be used.}
 
@@ -134,31 +125,70 @@ The above rules have the following implications:
 }
 }
 \examples{
-simData <- simTrial(N=c(1000, rep(700, 2)), aveVE=seq(0, 0.4, by=0.2), 
-                    VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78, 
-                    enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05, 
-                    infecRate=0.04, fuTime=156, 
-                    visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)),
-                    missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=5, 
+simData <- simTrial(N=c(1000, 1000), aveVE=c(0, 0.4),
+                    VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78,
+                    enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05,
+                    infecRate=0.06, fuTime=156, visitSchedule=seq(0, 156, by=4),
+                    missVaccProb=0.05, VEcutoffWeek=26, nTrials=5,
                     stage1=78, randomSeed=300)
-   
-monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156, 
-                            harmMonitorRange=c(10,100), alphaPerTest=NULL, 
-                            nonEffStartMethod="FKG", nonEffInterval=20, 
-                            lowerVEnoneff=0, upperVEnoneff=0.4, highVE=0.7, 
-                            stage1VE=0, lowerVEuncPower=0, alphaNoneff=0.05,
-                            alphaHigh=0.05, alphaStage1=0.05, alphaUncPower=0.05,
-                            estimand="cuminc", lagTime=26)
+                    
+### trial design: fixed follow-up; cumulative incidence-based VE estimand;
+                  no efficacy monitoring; non-efficacy monitoring using 
+                  the Freidlin et al. method; hypothesis tests based on Wald 
+                  confidence intervals
+### RIGHT NOW, THE BELOW CALL IS BROKEN
+monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
+                            harmMonitorRange=c(10, NA), harmMonitorAlpha=0.05,
+                            nonEffStartMethod="FKG", nonEffInterval=20,
+                            nonEffCohorts=list(timeUnit="counts",
+                                               # right now 'timingCohort' is required
+                                               timingCohort=list(lagTime=0),
+                                               cohort1=list(estimand="cuminc",
+                                                            nullVE=0.4,
+                                                            nominalAlphas=0.025)),
+                            # it appears that right now 'effCohort' must be specified
+                            # even when there is no efficacy monitoring;
+                            # this call of monitorTrial() still doesn't run
+                            # because it requires event counts for timing
+                            effCohort=list(timeUnit="counts",
+                                           timingCohort=list(lagTime=0)),
+                            lowerVEnoneff=0, highVE=0.7, lowerVEuncPower=0, 
+                            alphaHigh=0.05, alphaUncPower=0.05)
+                            
+### trial design: event-driven; hazard-based VE estimand;
+                  harmonized efficacy and non-efficacy monitoring; 
+                  hypothesis tests using the score test in the Cox model
+### THE SCORE TEST OPTION NEEDS TO BE ADDED
+monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
+                            harmMonitorRange=c(10, 50), harmMonitorAlpha=0.05,
+                            nonEffCohorts=list(
+                              times=c(50, 100, 150),
+                              timeUnit="counts",
+                              timingCohort=list(lagTime=0),
+                              cohort1=list(estimand="cox",
+                                           nullVE=0.4,
+                                           nominalAlphas=c(0.0001, 0.0060, 0.0231))),
+                            effCohort=list(times=c(50, 100, 150),
+                                           timeUnit="counts",
+                                           timingCohort=list(lagTime=0),
+                                           estimand="cox",
+                                           nullVE=0,
+                                           nominalAlphas=c(0.0001, 0.0060, 0.0231)),
+                            highVE=1, lowerVEuncPower=0, 
+                            alphaHigh=0.05, alphaUncPower=0.05)
    
 ### alternatively, to save the .RData output file (no '<-' needed):
 ###
-### simTrial(N=c(1400, rep(1000, 2)), aveVE=seq(0, 0.4, by=0.2), VEmodel="half", 
-###          vePeriods=c(1, 27, 79), enrollPeriod=78, enrollPartial=13, 
-###          enrollPartialRelRate=0.5, dropoutRate=0.05, infecRate=0.04, fuTime=156, 
-###          visitSchedule=c(0, (13/3)*(1:4), seq(13*6/3, 156, by=13*2/3)), 
-###          missVaccProb=c(0,0.05,0.1,0.15), VEcutoffWeek=26, nTrials=30, 
+### simTrial(N=c(1000, 1000), aveVE=c(0, 0.4),
+###          VEmodel="half", vePeriods=c(1, 27, 79), enrollPeriod=78,
+###          enrollPartial=13, enrollPartialRelRate=0.5, dropoutRate=0.05,
+###          infecRate=0.06, fuTime=156, visitSchedule=seq(0, 156, by=4),
+###          missVaccProb=0.05, VEcutoffWeek=26, nTrials=5,
 ###          stage1=78, saveDir="./", randomSeed=300)
 ###
+### THIS CALL NEEDS TO BE REVISED TO A SIMPLE BUT WORKING CODE
+### THE INTENT HERE IS ONLY TO ILLUSTRATE HOW OUTPUT FILES CAN BE READ IN
+### THE PURPOSE IS NOT TO SHOW ANY ADDITIONAL TRIAL DESIGNS
 ### monitorTrial(dataFile=
 ###              "simTrial_nPlac=1400_nVacc=1000_1000_aveVE=0.2_0.4_infRate=0.04.RData", 
 ###              stage1=78, stage2=156, harmMonitorRange=c(10,100), alphaPerTest=NULL, 
@@ -172,5 +202,5 @@ monitorData <- monitorTrial(dataFile=simData, stage1=78, stage2=156,
 Freidlin B., Korn E. L., and Gray R. (2010), A general inefficacy interim monitoring rule for randomized clinical trials. \emph{Clinical Trials} 7(3):197-208.
 }
 \seealso{
-\code{\link{simTrial}}, \code{\link{censTrial}}, and \code{\link{rankTrial}}
+\code{\link{simTrial}}, \code{\link{censTrial}}, \code{\link{rankTrial}}, \code{\link{estHRbound}}, \code{\link{crossBoundCumProb}}, and \code{\link{decisionTimes}}
 }

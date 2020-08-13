@@ -11,7 +11,8 @@ tabEventAccrual(
   prob = 0.5,
   lagTimeMITT = 0,
   lagTimePP = NULL,
-  namePP = "pp1"
+  namePP = "pp1",
+  na.ub = 0.2
 )
 }
 \arguments{
@@ -28,6 +29,8 @@ tabEventAccrual(
 \item{lagTimePP}{a time point (in weeks). If specified, only PP events with time-to-event \eqn{\ge} \code{lagTimePP} are counted in the PP column.}
 
 \item{namePP}{a character string specifying the name of the column in each data frame in \code{trialData} which indicates membership in the PP cohort (default is "\code{pp1}")}
+
+\item{na.ub}{a numeric value specifying an upper limit on the fraction of simulated trials that do not reach a given event count in \code{atEvents} to still compute the empirical quantile of time-to-accrual. If the fraction of such trials exceeds \code{na.ub}, \code{NA} will be produced.}
 }
 \value{
 A data frame (with at least two columns) of event totals and associated time periods since first enrollment required to accrue the event totals in the MITT cohort. If an PP cohort is specified (via \code{lagTimePP}), a third column is added.
@@ -64,5 +67,5 @@ tabEventAccrual(simData$trialData, atWeeks=seq(52, 156, by=8), lagTimePP=6)
 
 }
 \seealso{
-\code{\link(simTrial)}
+\code{\link{simTrial}}
 }
