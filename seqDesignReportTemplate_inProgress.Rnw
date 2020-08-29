@@ -22,24 +22,28 @@
 \newcommand\TT{\rule{0pt}{2.9ex}}
 
 \begin{document}
-\SweaveOpts{concordance=TRUE}
 <<label=inputParameters, results='asis', echo=FALSE, warning=FALSE, message=FALSE>>=
 rm(list=ls(all=TRUE))
 
-knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE)
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE)
 
 library(CoRpower)
 library(xtable)
 library(ggplot2)
 library(ldbounds)
 # source seqDesign from your local master branch (this has several advantages at this stage of code development over sourcing from the remote master branch)
-source("C:/Users/Brian/Documents/R/source_seqDesign.R")
+if (Sys.getenv("USERNAME")=="mjuraska"){
+  source("h:/SCHARP/seqDesign/code/source_seqDesign.R")
+} else {
+  source("C:/Users/Brian/Documents/R/source_seqDesign.R")  
+}
+
 
 
 # THE BELOW USER-SPECIFIED VALUES ARE AUTOMATICALLY APPLIED TO THE ENTIRE REPORT ------------------
 
 # a directory storing output from simTrial, monitorTrial, and censTrial
-srcDir <- "C:/Users/Brian/Documents/R/seqOutput"
+srcDir <- ifelse(Sys.getenv("USERNAME")=="mjuraska", "t:/vaccine/COVID-19/Routput/NIAID/2to1VtoPratio/v5", "C:/Users/Brian/Documents/R/seqOutput")
 
 N.pla <- 9000          
 N.vax <- 18000          
@@ -278,7 +282,7 @@ Endpoints) & Signif Level & at Bndary & Bndary if $\overline{VE}\textrm{(2--32)}
 % \end{table}
 
 \newpage
-<<label=tableOutcomeProbs, results='asis', cache=TRUE>>=
+<<label=tableOutcomeProbs, results='asis'>>=
 # 'aveVE.vector' determines what results are reported in each row
 aveVE.vector <- c(-2, -1.5, -1, -0.5, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
 
@@ -361,7 +365,7 @@ print(xtable(res1,
 
 \begin{figure}[H]
 \begin{center}
-<<label=plotOutcomeProbs, results='asis', fig.width=10, fig.asp=0.7, out.width='95%', cache=TRUE>>=
+<<label=plotOutcomeProbs, results='asis', fig.width=10, fig.asp=0.7, out.width='95%'>>=
 res <- subset(res, aveHR<=1)
   
 par(mar=c(4.5,5,3,1.5), las=1, cex.axis=1.2, cex.lab=1.3, cex.main=1.2)
@@ -395,7 +399,7 @@ cat("\\caption{Probabilities of reaching each possible trial monitoring outcome"
 \end{figure}
 
 \newpage
-<<label=tableProbMeetEffByAnalysisNumber, results='asis', cache=TRUE>>=
+<<label=tableProbMeetEffByAnalysisNumber, results='asis'>>=
 df <- data.frame(aveVE=paste0(aveVE.vector * 100, "%"), pEffA1=0, pEffA2=0, pEffA3=0)
 
 for (i in 1:length(aveVE.vector)){
@@ -491,7 +495,7 @@ ggplot(qTimes, aes(x=aveVE, y=q0.5)) +
 \newpage
 \begin{figure}[H]
 \begin{center}
-<<label=plotTimeToReportingPrimaryResult_v2, fig.width=6, fig.asp=0.7, out.width='95%', cache=TRUE>>=
+<<label=plotTimeToReportingPrimaryResult_v2, fig.width=6, fig.asp=0.7, out.width='95%'>>=
 # a list named 'decisionTimes'
 monitorTrialFile <- paste0("monitorTrial_nPlac=", N.pla, "_nVacc=", N.vax, "_aveVE=", aveVE.vector, "_infRate=", infRate.fmt, "_cox.RData")
 times <- decisionTimes(monitorTrialFile, monitorTrialDir=srcDir)
@@ -550,7 +554,7 @@ print(xtable(tableEventSplitAndCI,
 \newpage
 \begin{figure}[H]
 \begin{center}
-<<label=plotDuration1VaxArmEvaluation, fig.width=10, fig.asp=0.7, out.width='95%', cache=TRUE>>=
+<<label=plotDuration1VaxArmEvaluation, fig.width=10, fig.asp=0.7, out.width='95%'>>=
 stage2 <- 108
 cumProbTrialDuration1VaxArm <- function(simTrial.filename, monitorTrial.filename, dirname, stage2=stage2){
   load(file.path(dirname, simTrial.filename))
@@ -671,7 +675,7 @@ if (N.vax.arms>1){
 @
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atEvents_q0.5, results='asis', cache=TRUE>>=
+<<label=tabEventAccrual_VE0.6_atEvents_q0.5, results='asis'>>=
 aveVE <- 0.6
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -704,7 +708,7 @@ print(xtable(tableEventAccrual,
 
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atEvents_q0.8, results='asis', cache=TRUE>>=
+<<label=tabEventAccrual_VE0.6_atEvents_q0.8, results='asis'>>=
 aveVE <- 0.6
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -737,7 +741,7 @@ print(xtable(tableEventAccrual,
 
 
 \newpage
-<<label=tabEventAccrual_VE0.8_atEvents_q0.5, results='asis', cache=TRUE>>=
+<<label=tabEventAccrual_VE0.8_atEvents_q0.5, results='asis'>>=
 aveVE <- 0.8
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -770,7 +774,7 @@ print(xtable(tableEventAccrual,
 
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atWeeks_q0.5, results='asis', cache=TRUE, eval=FALSE>>=
+<<label=tabEventAccrual_VE0.6_atWeeks_q0.5, results='asis', eval=FALSE>>=
 aveVE <- 0.6
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -800,7 +804,7 @@ print(xtable(tableEventAccrual,
 @
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atWeeks_q0.8, results='asis', cache=TRUE, eval=ifelse(file.exists(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData"))), TRUE, FALSE)>>=
+<<label=tabEventAccrual_VE0.6_atWeeks_q0.8, results='asis', eval=ifelse(file.exists(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData"))), TRUE, FALSE)>>=
 aveVE <- 0.6
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -831,7 +835,7 @@ print(xtable(tableEventAccrual,
 
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atWeeks_q0.5_infRate0.005, results='asis', cache=TRUE, eval=FALSE>>=
+<<label=tabEventAccrual_VE0.6_atWeeks_q0.5_infRate0.005, results='asis', eval=FALSE>>=
 aveVE <- 0.6
 pMissVax <- 0.02
 infRate1 <- 0.5 * infRate
@@ -864,7 +868,7 @@ print(xtable(tableEventAccrual,
 
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atWeeks_q0.5_infRate0.01, results='asis', cache=TRUE, eval=FALSE>>=
+<<label=tabEventAccrual_VE0.6_atWeeks_q0.5_infRate0.01, results='asis', eval=FALSE>>=
 aveVE <- 0.6
 pMissVax <- 0.02
 infRate1 <- 0.75 * infRate
@@ -897,7 +901,7 @@ print(xtable(tableEventAccrual,
 
 
 \newpage
-<<label=tableNvaccInfPostM6WithMonitor, results='asis', cache=TRUE>>=
+<<label=tableNvaccInfPostM6WithMonitor, results='asis'>>=
 infThroughWeekVec <- c(7, 13) * 52 / 12
 pMissVax <- 0.02
 
@@ -1239,7 +1243,7 @@ print(xtable(tableNoneffBoundary,
 % Below is the original seqDesign Report Template:
 
 \newpage
-<<label=tabEventAccrual_atEvents_q0.5, results='asis', cache=TRUE, eval=FALSE>>=
+<<label=tabEventAccrual_atEvents_q0.5, results='asis', eval=FALSE>>=
 aveVE <- 0.4
 pMissVax <- 0.05
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
@@ -1272,7 +1276,7 @@ print(xtable(tableEventAccrual,
 @
 
 \newpage
-<<label=tabEventAccrual_atEvents_q0.8, results='asis', cache=TRUE, eval=FALSE>>=
+<<label=tabEventAccrual_atEvents_q0.8, results='asis', eval=FALSE>>=
 aveVE <- 0.4
 pMissVax <- 0.05
 prob=0.8
@@ -1307,7 +1311,7 @@ print(xtable(tableEventAccrual,
 
 
 \newpage
-<<label=tabEventAccrual_atWeeks_q0.5, results='asis', cache=TRUE, eval=FALSE>>=
+<<label=tabEventAccrual_atWeeks_q0.5, results='asis', eval=FALSE>>=
 aveVE <- 0.6
 pMissVax <- 0.05
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
@@ -1338,7 +1342,7 @@ print(xtable(tableEventAccrual,
 
 
 \newpage
-<<label=tabEventAccrual_atWeeks_q0.8, results='asis', cache=TRUE, eval=FALSE>>=
+<<label=tabEventAccrual_atWeeks_q0.8, results='asis', eval=FALSE>>=
 aveVE <- 0.6
 pMissVax <- 0.05
 prob <- 0.2
@@ -1369,7 +1373,7 @@ print(xtable(tableEventAccrual,
 @
 
 \newpage
-<<label=tableRankSelect, results='asis', cache=TRUE, eval=FALSE>>=
+<<label=tableRankSelect, results='asis', eval=FALSE>>=
 aveVEsets=matrix(c(0.4,0,
                    0.4,0.2,
                    0.4,0.3,
@@ -1421,7 +1425,7 @@ for (type in typeVec){
 
 \begin{figure}[H]
 \begin{center}
-<<label=plotHarmStopBounds, fig.width=5, fig.height=3.8, cache=TRUE, eval=ifelse(file.exists(file.path(srcDir, paste0("harmBounds_N=60_alphaPerTest=0.0140_pVacc=",round(N.vax/(N.pla+N.vax),2),".csv"))), TRUE, FALSE)>>=
+<<label=plotHarmStopBounds, fig.width=5, fig.height=3.8, eval=ifelse(file.exists(file.path(srcDir, paste0("harmBounds_N=60_alphaPerTest=0.0140_pVacc=",round(N.vax/(N.pla+N.vax),2),".csv"))), TRUE, FALSE)>>=
 harmData <- read.csv(file.path(srcDir, paste0("harmBounds_N=60_alphaPerTest=0.0140_pVacc=",round(N.vax/(N.pla+N.vax),2),".csv")))
 harmData <- subset(harmData, N>=10)
 par(mar=c(5.5,5,1,1), las=1, cex.axis=1.1, cex.lab=1.2)
@@ -1445,7 +1449,7 @@ text(42, 21, "Potential Harm\nStopping\nBoundaries", adj=0, cex=1.1, font=2, col
 \end{figure}
 
 
-<<label=tableInfSplits, results='asis', cache=TRUE, eval=ifelse(file.path(srcDir,paste0("monitorTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=0.2_infRate=",infRate,"_",estimand,".RData")), TRUE, FALSE)>>=
+<<label=tableInfSplits, results='asis', eval=ifelse(file.path(srcDir,paste0("monitorTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=0.2_infRate=",infRate,"_",estimand,".RData")), TRUE, FALSE)>>=
 VEbinomModel <- function(p, r){ 1 - r*p/(1-p) }
 
 UL95 <- function(pHat, n, r, bound){ VEbinomModel(pHat, r) + qnorm(0.975)*sqrt(pHat*(r^2)/(n*((1-pHat)^3))) - bound }

@@ -26,6 +26,10 @@ vignettes/*.html
 # knitr and R markdown default cache directories
 /*_cache/
 /cache/
+/figure/
+*.tex
+*.log
+*.synctex.gz
 
 # Temporary files created by R markdown
 *.utf8.md
