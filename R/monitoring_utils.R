@@ -1007,7 +1007,7 @@ getEstHR <- function(boundType, nullHR, alpha, nEvents, randFrac){
 #' Assuming an exponential survival model, hazard ratios are estimated at an efficacy or non-efficacy stopping boundary, defined using the Wald CI approach, at each group-sequential analysis in an event-driven 2-arm trial design.
 #' 
 #' @param boundType a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \geq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \leq \theta_0} (\code{"nonEff"}), where \eqn{\theta} is the hazard ratio and \eqn{\theta_0} is specified by \code{nullHR}
-#' @param nullHR a nonnegative numeric value specifying the hazard ratio, \eqn{\theta_0}, under the null hypothesis
+#' @param nullHR a nonnegative numeric value specifying the hazard ratio, \eqn{\theta_0}, under the null hypothesis. If the null hypothesis differs across multiple analyses, \code{nullHR} may be a numeric vector of equal length as \code{alpha}.
 #' @param alpha a numeric vector of nominal significance levels (e.g., those defined by the O'Brien-Fleming group-sequential test)
 #' @param nEvents a numeric vector of numbers of events at which analyses is performed. The lengths of \code{alpha} and \code{nEvents} must be the same, and the components of the two vectors must correspond to each other.
 #' @param randFrac a fraction of subjects randomized to the group considered in the hazard ratio's numerator
@@ -1036,11 +1036,19 @@ estHRbound <- function(boundType=c("eff", "nonEff"), nullHR, alpha, nEvents, ran
     stop("The arguments 'alpha' and 'nEvents' must be of equal length.")
   }
   
+  if (length(nullHR)>1){
+    if (length(nullHR)!=length(alpha)){
+      stop("Since 'nullHR' is a vector, it must be of the same length as 'alpha'.\nAlternatively, 'nullHR' may be a scalar.")
+    }
+  } else {
+    nullHR <- rep(nullHR, length(alpha))
+  }
+  
   boundType <- match.arg(boundType)
   
   estHR <- NULL
   for (i in 1:length(alpha)){
-    estHR <- c(estHR, getEstHR(boundType, nullHR, alpha[i], nEvents[i], randFrac))
+    estHR <- c(estHR, getEstHR(boundType, nullHR[i], alpha[i], nEvents[i], randFrac))
   }
   
   return(estHR)
