@@ -307,8 +307,7 @@ monitorTrial <- function (dataFile,
 
                               cohort1 = list(
                                   estimand="cox", lagTime=NULL, cohortInd=NULL,
-                                  nullVE=NULL, nominalAlphas=c(0.0030, 0.0183, 0.0440) 
-                                  #totalAlpha=0.05, totalEvents=103, asf=NULL 
+                                  nullVE=NULL, nominalAlphas=NULL 
                               )
                           ),
 
