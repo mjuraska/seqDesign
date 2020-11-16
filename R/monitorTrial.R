@@ -189,11 +189,6 @@ monitorTrial <- function (dataFile,
                           ## be specified
                           alphaPerTest=NULL,
                           
-                          ## Argument 'estimand' is no longer supported.
-                          ## specify non-eff estimands within the 'nonEffCohorts' argument list,
-                          ## and efficacy estimands within the 'effCohort' arg. list
-                          #estimand=c("combined", "cox", "cuminc"),
-                          
                           ## character vector of methods to use to determine when to start non-efficacy
                           ## monitoring.  Each method requires different input information, and that
                           ## information should be input via the 'nonEffStartParams' argument - which
@@ -259,21 +254,6 @@ monitorTrial <- function (dataFile,
                   
                           nonEffIntervalUnit=c("counts","time"),
   
-                          #nonEffTimes=NULL,
-                          #nonEffTimeUnit=c("counts","time"),
-
-                          ## the 'lagTime' component here replaces the variable 'nonEffTimeLag'
-                          ## but it must be specified
-                          #nonEffTimingCohort=list(lagTime=NULL, cohortInd=NULL),
-
-                          ## Lag to use in determing the times at which nonEff testing should
-                          ## take place. Should specify the lag time after which events will
-                          ## be included in non-eff analyses.  If more than one cohort, and 
-                          ## lag time, is used in analysis, you must choose one of them to use
-                          ## here as the basis for analysis timing.  Only required if 
-                          ## nonEffTimeUnit="counts" and lagged counts will be used.
-                          #nonEffTimeLag= NULL,
-                          
                           # a single numeric value (for constant increments) or a numeric vector
                           # (for variable increments)
                           nonEffInterval,
@@ -395,15 +375,6 @@ monitorTrial <- function (dataFile,
                           alphaStage1,
                           alphaUncPower=NULL,
                           
-                          ## 'laggedMonitoring' indicates whether lagged monitoring should be
-                          ## used IN ADDITION TO unlagged monitoring 
-                          #laggedMonitoring=FALSE,
-
-                          ## 'lagTime' is required if laggedMonitoring is TRUE and indicates the
-                          ## size of the lag
-                          #lagTime = NULL,
-
-
                           saveFile= NULL,
                           saveDir = NULL,
                           verbose = TRUE ) {
@@ -442,20 +413,6 @@ monitorTrial <- function (dataFile,
   ##       One minus confidence level of 2-sided CI for unconditional power to
   ##       reject H0: VE <= (lowerVEuncPower * 100)% 
 
-
-  ## Process argument 'estimand', which has been deprecated.  This code chunk
-  ## can be removed in the future, when 'estimand' is completely removed.
-  ## ------------------------------------------------------------------------
-  # Check to see if 'estimand' is still in the argument list and if so, do further processing
-  if ( "estimand" %in% names(formals()) ) {
-
-     # if estimand was specified, issue a deprecation message
-     if ( !missing(estimand) ) { 
-        cat("Warning: Use of argument 'estimand' is no longer supported.\n\n",
-            "Please specify efficacy and non-efficacy estimands separately within the\n\n",
-            "'cohort' arguments: 'nonEffCohorts' and 'effCohort'","\n\n" )
-     }
-  }
 
   nonEffIntervalUnit <- match.arg(nonEffIntervalUnit)
   #nonEffTimeUnit     <- match.arg(nonEffTimeUnit)
