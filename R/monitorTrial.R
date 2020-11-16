@@ -355,12 +355,11 @@ monitorTrial <- function (dataFile,
                           #                   estimand, lagTime, cohortInd,
                           #                   totalAlpha, nullVE, totalEvents,
                           #                   spendingFunction),
-                          effCohort = list( times=c(52,77,103), timeUnit="counts", 
+                          effCohort = list( times=NULL, timeUnit="counts", 
                                             timingCohort=list(lagTime=NULL, cohortInd=NULL),
-                                            nullVE = 0.2, 
-                                            estimand="cox", lagTime=2, cohortInd="pp1",
-                                            nominalAlphas=c(0.0030, 0.0183, 0.0440) ),
-                                            #totalAlpha=0.05, totalEvents=103),
+                                            nullVE = NULL, 
+                                            estimand="cox", lagTime=NULL, cohortInd=NULL,
+                                            nominalAlphas=NULL),
 
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
@@ -951,6 +950,14 @@ monitorTrial <- function (dataFile,
         }
       }
       ## ----------------  End Processing nonEff timing args -------------------
+
+
+      ## -----  Process efficacy analysis inputs, so we know test to perform  ------
+      ## -----  if we stop early for harm or non-eff                          ------ 
+
+
+
+
 
 
       ## Now get 'N1' for the cases where we don't have it, which should only
