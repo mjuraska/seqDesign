@@ -217,34 +217,7 @@ monitorTrial <- function (dataFile,
                           ##          75th infection 
                           ##      Parameter: N1
                           ##
-                          ##  ? - method specifies start time by a combination of variables:
-                          ##      Parameters:
-                          ##         minCnt - gives the minimum (combined) infection count at which
-                          ##               monitoring can being
-                          ##         maxCnt - gives the maximum (combined) infection count at which
-                          ##               monitoring can begin (it will begin at this count 
-                          ##               whether or not the other criteria are satisfied).
-                          ##               [OPTIONAL]
-                          ##         lagTimes, lagMinCnts - these arguments are paired, each can
-                          ##               be a vector of length > 1. 'lagMinCnts' is a vector
-                          ##               if infection counts that are required to occur 'later
-                          ##               in the trial' (larger value of follow-up time) than
-                          ##               the associated time given in vector 'lagTimes'.
-                          ##               E.g if lagTimes=c(26,39) and lagMinCnts=c(25,5) this
-                          ##               says we cannot start until we've reached 25 infections
-                          ##               that have occurred *after* (not including) week 26, and
-                          ##               also 5 that have occurred after week 39.
-                          ##       NOTE: Parameters: minCnt, lagTimes and lagMinCnts are all required,
-                          ##               (minCnt can be set to 0 if desired); maxCnt is optional
-                          ##
-                          ##
-                          ##  custom - [ NOT YET IMPLEMENTED ] You provide the function and the parameters
-                          ##      Parameters: 'Func' (your function) + whatever parameters your function needs
-                          ##
-                          ##  old - the old 'seqDesign' starting method.  Severely deprecated.
-                          ##      Parameters: minCnt, minPct, week1, week2
-                          ##
-                          nonEffStartMethod=c("FKG", "fixed", "?", "old"),
+                          nonEffStartMethod=c("FKG", "fixed"),
                   
                           ## A *list* (not a vector) of parameters needed by the method specified
                           ## in argument 'nonEffStartMethod'.  Some methods have defaults in place,
@@ -360,6 +333,15 @@ monitorTrial <- function (dataFile,
                                             estimand="cox", lagTime=NULL, cohortInd=NULL,
                                             nominalAlphas=NULL),
 
+                          # stage1Eff is used to perform a test of efficacy at the end of
+                          # stage 1 follow-up only.  It is intended for use in designs that
+                          # are NOT event driven. 
+                          stage1Eff = list(
+                              cohort = list(lagTime=0, cohortInd=NULL),
+                              nullVE = NULL, nominalAlpha = NULL,
+                              estimand = "cox" 
+                          ),
+
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
                           lowerVEnoneff=NULL,
@@ -450,6 +432,15 @@ monitorTrial <- function (dataFile,
 
   ## --- New code to process efficacy arguments ---
 
+  ## create indicator var.s telling us whether 'effCohort' and 'stage1Eff' have
+  ## been specified
+  effCoh  <- ifelse( is.missing(effCohort) || is.null(effCohort$times), FALSE, TRUE)
+  stg1Eff <- ifelse( is.missing(stage1Eff) || is.null(stage1Eff$nullVE),FALSE, TRUE) 
+
+  if (!effCoh && !stg1Eff)
+      stop("Either 'effCohort' or 'stage1Eff' must be specified in monitorTrial()\n")
+
+
 
   ## ----------------------------------------------------------------------
   ##   The following code is needed to determine infection count at which to 
@@ -522,12 +513,6 @@ monitorTrial <- function (dataFile,
     ## if either indicator is set (is "ne" timing diff. from Harm timing
     neTimingDiff <- ifelse(laggedMonitoring || neTimeCohInd, TRUE, FALSE )
   }
-
-  if (nonEffStartMethod %in% c("?","old") && laggedMonitoring) 
-    stop("\n","Usage of argument of laggedMonitoring is no longer compatible ",
-         "with nonEffStartMethods '?' and 'old'.\n","Lagged monitoring is now ",
-         "implemented based on lagged infection counts while these two start ",
-         "methods return unlagged monitoring start counts.\n\n")
 
   if ( !is.null(nonEffCohorts$times) && nonEffCohorts$timeUnit == "counts")  {
     nonEffCnts <- nonEffCohorts$times
@@ -625,14 +610,6 @@ monitorTrial <- function (dataFile,
                                     totalAlpha = harmMonitorAlpha)
   }
 
-  ## If nonEffStartMethod "?" was chose then see if maxCnt was used
-  if (nonEffStartMethod == "?" && !is.null(nonEffStartParams$maxCnt) ) {
-      if ( is.infinite(nonEffStartParams$maxCnt) ) 
-          nonEffStartParams$maxCnt <- NULL
-      else
-          maxCnt <- nonEffStartParams$maxCnt
-  }
-
   ## For generating the bounds, we need both 'N' and the upper limit of 
   ## 'harmMonitorRange' to be an upper limit on the number of tests to do
   ## (i.e. an upper limit on when the first non-efficacy will be done)
@@ -666,6 +643,8 @@ monitorTrial <- function (dataFile,
       stg1dat <- censorTrial(trialObj$trialData, times=stage1,
                              timeScale="follow-up")
   }
+
+
 
   ## Make note of whether 'N1' exists (it will for certain types of non-eff. monitoring
   ## timing).  If it does, then N1 will remain constant throughout the trial.
@@ -720,61 +699,6 @@ monitorTrial <- function (dataFile,
       E.j$nInf <- 1:nInfec
 
 
-      ## NOTE- both "?" and "old" start methods cannot be used with laggedMonitoring
-      ##       I added code stop() out if both are specified - so we can assume 
-      ##       that laggedMonitoring is FALSE hence N1 is truly N1
-      if (nonEffStartMethod == "?") {
-          if (!is.null(nonEffStartParams)) {
-              argNames <- c("minCnt","maxCnt","lagTimes","lagMinCnts")
-              argList <- nonEffStartParams[ 
-                             argNames[ argNames %in% names(nonEffStartParams) ] ]
-
-              if (!all( c("minCnt","lagTimes","lagMinCnts") %in% names(argList) ))
-                  stop("The argument 'nonEffStartParams' has been specified but",
-                       "it does not contain\n", "all the parameters needed by ",
-                       "nonEffStartMethod '?'\n") 
-          } else {
-              stop("The use of nonEffStartMethod ", nonEffStartMethod, " requires",
-                   " that you specify parameters: \n",
-                   " 'minCnt', 'lagTimes' and 'lagMinCnts' \n",
-                   "They must be passed to 'monitorTrial' through the argument ",
-                   "nonEffStartParams - which must be a list.\n",
-                   "Please fix and then rerun\n")
-          }
-          ## gets infection count at which non-efficacy monitoring begins
-          N1 <- getFirstNonEffCnt(datI.j, minCnt=argList$minCnt,
-                    lagTimes=argList$lagTimes, lagMinCnts=argList$lagMinCnts )
-
-      } else if (nonEffStartMethod == "old") {
-
-          if (!is.null(nonEffStartParams)) {
-              ## values specified directly by user - maybe. 
-              ## We don't know what's actually in 'nonEffStartMethod' yet
-              minPct  <- nonEffStartParams$minPct
-              minCnt  <- nonEffStartParams$minCnt
-              week1   <- nonEffStartParams$week1
-              minCnt2 <- nonEffStartParams$minCnt2
-              week2   <- nonEffStartParams$week2
-
-              if ( is.null(minPct)  || is.null(minCnt) || is.null(week1) ||
-                   is.null(minCnt2) || is.null(week2)  ) 
-                  stop("The argument 'nonEffStartParams' has been specified but",
-                      "it does not contain\n", "all the parameters needed by ",
-                      "nonEffStartMethod 'old'\n")
-          }
-
-          ## Old method of determining "N1" - deprecated for mulitple reasons:
-          ## it cannot easily be determined when/if the minPct criteria will be
-          ## satisfied, introducing an inability to effectively anticipate and
-          ## plan for analyses.  Other methods allow for use of various forms 
-          ## of minimum infection cutoffs - those should be used instead
-          N1 <- getInfecCntFirstNonEff( E.j, 
-                     minPercent = minPct,
-                     minCount = minCnt, 
-                     week1 = week1, 
-                     nInfecAfterwk = minCnt2,
-                     week2 = week2)
-      }
       ## set N1.ne for the cases for which N1 was just defined (immed. above)
       if ( !exists("N1.ne") && exists("N1") )
         N1.ne <- N1
@@ -951,11 +875,9 @@ monitorTrial <- function (dataFile,
       ## ----------------  End Processing nonEff timing args -------------------
 
 
-      ## -----  Process efficacy analysis inputs, so we know test to perform  ------
-      ## -----  if we stop early for harm or non-eff                          ------ 
-
-
-
+      ## -----  Process efficacy analysis inputs here so we know what test  --------
+      ## -----  to perform if we stop early for harm or non-eff             -------- 
+     
 
 
 
@@ -1276,18 +1198,6 @@ monitorTrial <- function (dataFile,
           ## code above, create it now
           if ( !exists("nominalAlphas.ij") )
             nominalAlphas.ij <- effCohort$nominalAlphas
-
-
-          if (is.null(effCohort$nominalAlphas) ) {
-            ## get the bounds using package ldbounds, function bounds()
-            bounds <- ldbounds::bounds(t= effTimes_info, iuse= 5, 
-                                       asf= effCohort$spendingFunction,
-                                       alpha = effAlpha/2 )
-
-            ## back-calculate to get the (nominal) test-specific alphas from the 
-          } else {
-            nominalAlphas <- effCohort$nominalAlphas
-          }
 
           if ( !is.null( effCohort$cohortInd ) ) {
             effdatI.j <- datI.j[ datI.j[[ effCohort$cohortInd ]] == 1, ]
