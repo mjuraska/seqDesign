@@ -1,32 +1,46 @@
-\documentclass[11pt]{article}
+---
+title:
+author:
+output:
+  pdf_document:
+    fig_caption: yes
+    toc: yes
+    toc_depth: 4
+    number_sections: yes
+    keep_tex: yes
+  html_document:
+    toc: yes
+    toc_depth: '4'
+    df_print: paged
+header-includes: 
+              -  \usepackage{caption}
+              -  \usepackage{amsmath, amsthm, amssymb}
+              -  \usepackage{amsfonts}
+              -  \usepackage{multirow}
+              -  \usepackage[round,authoryear]{natbib}
+              -  \usepackage{lscape}
+              -  \usepackage{float}
+              -  \usepackage{array}
+              -  \usepackage{subfig}
+              -  \usepackage{epsfig, psfrag, graphicx, lscape}
+              -  \usepackage{comment}
+              -  \usepackage{parskip}
+              -  \newcommand\T{\rule{0pt}{2.4ex}}
+              -  \newcommand\TT{\rule{0pt}{2.9ex}}
 
-\usepackage{amsmath, amsthm, amssymb}
-\usepackage[cp1250]{inputenc}
-% \usepackage[english]{babel}
-\usepackage{amsfonts}
-\usepackage{multirow}
-\usepackage[round,authoryear]{natbib}
-\usepackage{lscape}
-\usepackage{float}
-\usepackage{array}
-\usepackage{subfig}
-\usepackage{epsfig, psfrag, graphicx, lscape}
-\usepackage{comment}
-\textwidth=6.5in
-\textheight=8.4in
-\setlength{\topmargin}{0.21truein}
-\hoffset-18mm
-\usepackage{parskip}
+              
+geometry: left=0.5in,right=0.5in,bottom=0.75in,top=0.75in
+---
+<!-- \documentclass[11pt]{article} -->
+<!-- \usepackage[cp1250]{inputenc} -->
+<!-- \usepackage[english]{babel} -->
 
-\newcommand\T{\rule{0pt}{2.4ex}}
-\newcommand\TT{\rule{0pt}{2.9ex}}
 
-\begin{document}
-\SweaveOpts{concordance=TRUE}
-<<label=inputParameters, results='asis', echo=FALSE, warning=FALSE, message=FALSE>>=
+<!-- \SweaveOpts{concordance=TRUE} -->
+```{r label=inputParameters, results='asis', echo=FALSE, warning=FALSE, message=FALSE}
 rm(list=ls(all=TRUE))
 
-knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE)
+knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, fig.width=8, fig.asp=0.5, out.width='100%')
 
 library(CoRpower)
 library(xtable)
@@ -39,19 +53,19 @@ if (Sys.getenv("USERNAME")=="mjuraska"){
   source("C:/Users/brian/OneDrive/Documents/R/source_seqDesign.R")  
 }
 
-
+options(xtable.comment = FALSE)
 
 # THE BELOW USER-SPECIFIED VALUES ARE AUTOMATICALLY APPLIED TO THE ENTIRE REPORT ------------------
 
 # a directory storing output from simTrial, monitorTrial, and censTrial
-srcDir <- ifelse(Sys.getenv("USERNAME")=="mjuraska", "t:/vaccine/COVID-19/Routput/NIAID/2to1VtoPratio/v5", "C:/Users/Brian/Documents/R/seqOutput")
+srcDir <- ifelse(Sys.getenv("USERNAME")=="mjuraska", "t:/vaccine/COVID-19/Routput/NIAID/2to1VtoPratio/v5", "C:/Users/brian/Documents/R/seqOutput")
 
-N.pla <- 9000          
-N.vax <- 18000          
+N.pla <- 1900
+N.vax <- 1700
 N.vax.arms <- 1         
 
 # annual placebo incidence rate
-infRate <- 0.028 / 0.9
+infRate <- 0.04
 infRate.fmt <- format(infRate, digits=3, nsmall=3)
 
 # interim monitoring for benefit/efficacy
@@ -127,7 +141,7 @@ VEboundNonEff <- ifelse(is.na(HRboundNonEff), "n/a", format((1 - HRboundNonEff) 
 HRboundNonEff <- ifelse(is.na(HRboundNonEff), "n/a", format(HRboundNonEff, digits=4, nsmall=4))
 cumProbCrossNonEff <- format(cumProbCrossNonEff * 100, digits=1, nsmall=1)
 cumProbCrossNonEffUnderH1 <- ifelse(cumProbCrossNonEffUnderH1<0.001, "$<0.1$", format(cumProbCrossNonEffUnderH1 * 100, digits=1, nsmall=1))
-@
+```
 
 \begin{center}
 {\LARGE Operating Characteristics of a Phase 3 Multi-Center, Group-Sequentially Monitored, Randomized, Controlled, Double-Blind, Efficacy Study of an Arbitrary Candidate SARS-CoV-2 Vaccine}\bigskip\bigskip\\
@@ -137,21 +151,22 @@ cumProbCrossNonEffUnderH1 <- ifelse(cumProbCrossNonEffUnderH1<0.001, "$<0.1$", f
 \vspace*{5mm}
 {\Large Simulation Set-up}
 \begin{itemize}
-\item $N=27000$ SARS-CoV-2-negative participants at baseline, randomly allocated in the 2:1 ratio to vaccine vs. placebo (assuming 10\% of the randomized 30000 participants are SARS-CoV-2-positive at baseline)
-\item All operating characteristics are for the 27000 baseline negative participants (18000 in the vaccine arm, 9000 in the placebo arm)
-\item \Sexpr{atEventCount[length(atEventCount)]} primary endpoints occurring $\geq 15$ days after the first dose in the FAS cohort (henceforth referred to as the FAS-15d+ endpoints) is the target endpoint total for the event-driven primary analysis
-\item Efficacy monitoring at \Sexpr{infFractionEff[1]}\%, \Sexpr{infFractionEff[2]}\%, and \Sexpr{infFractionEff[3]}\% of the target \Sexpr{atEventCount[length(atEventCount)]} FAS-15d+ endpoints in the FAS cohort
-\item Non-efficacy monitoring at \Sexpr{infFractionNonEff[1]}\%, \Sexpr{infFractionNonEff[2]}\%, and \Sexpr{infFractionNonEff[3]}\% of approximately \Sexpr{atEventCountNonEff[length(atEventCountNonEff)]} endpoints occurring $\geq 15$ days after the second dose (henceforthh referred to as the PP-15d+ endpoints) in the PP cohort
-\begin{itemize}
-\item The PP cohort includes all FAS participants who received the second dose
+\item  $N=27000$ SARS-CoV-2-negative participants at baseline, randomly allocated in the 2:1 ratio to vaccine vs. placebo (assuming 10\% of the randomized 30000 participants are SARS-CoV-2-positive at baseline)
+\item  All operating characteristics are for the 27000 baseline negative participants (18000 in the vaccine arm, 9000 in the placebo arm)
+\item  `r atEventCount[length(atEventCount)]` primary endpoints occurring $\geq 15$ days after the first dose in the FAS cohort (henceforth referred to as the FAS-15d+ endpoints) is the target endpoint total for the event-driven primary analysis
+\item  Efficacy monitoring at `r infFractionEff[1]`\%, `r infFractionEff[2]`\%, and `r infFractionEff[3]`\% of the target `r atEventCount[length(atEventCount)]` FAS-15d+ endpoints in the FAS cohort
+\item  Non-efficacy monitoring at `r infFractionNonEff[1]`\%, `r infFractionNonEff[2]`\%, and `r infFractionNonEff[3]`\% of approximately `r atEventCountNonEff[length(atEventCountNonEff)]` endpoints occurring $\geq 15$ days after the second dose (henceforthh referred to as the PP-15d+ endpoints) in the PP cohort
 \end{itemize}
-\item 3-month uniform accrual
-\item 25 months of participant follow-up (i.e., 2 years of follow-up post-vaccination)
-\item \Sexpr{format(0.5 * infRate * 100, digits=3, nsmall=3)}\% 6-month COV-DIS incidence rate in the placebo arm 
 \begin{itemize}
-\item Chosen as the minimal incidence rate satisfying the requirement that the target numbers of FAS-15d+ endpoints under both 2:1 and 1:1 allocation ratios be accrued with 80\% probability by 6.5 months since trial initiation in the scenario with $\overline{VE}$(2--32 weeks)$\,=60\%$ (see below for description of the VE model)
+\item  The PP cohort includes all FAS participants who received the second dose
+\item  3-month uniform accrual
+\item  25 months of participant follow-up (i.e., 2 years of follow-up post-vaccination)
+\item  `r format(0.5 * infRate * 100, digits=3, nsmall=3)`\% 6-month COV-DIS incidence rate in the placebo arm 
 \end{itemize}
-\item Stepwise VE model (all tables and figures are labeled by the time-averaged VE level over the time interval of (2, 32] weeks of follow-up denoted by $\overline{VE}$(2--32)):
+\begin{itemize}
+\item  Chosen as the minimal incidence rate satisfying the requirement that the target numbers of FAS-15d+ endpoints under both 2:1 and 1:1 allocation ratios be accrued with 80\% probability by 6.5 months since trial initiation in the scenario with $\overline{VE}$(2--32 weeks)$\,=60\%$ (see below for description of the VE model)
+\item  Stepwise VE model (all tables and figures are labeled by the time-averaged VE level over the time interval of (2, 32] weeks of follow-up denoted by $\overline{VE}$(2--32)):
+\end{itemize}
 \begin{center}
 \begin{tabular}{cc}
 \hline \hline
@@ -165,125 +180,121 @@ Time Period & \\
 \hline \hline
 \end{tabular}
 \end{center}
-\item 2\% annual dropout in each arm
-\item 2\% probability of a missed second dose (used in definition of the PP cohort)
-% \item Criteria for PP cohort membership
-% \begin{itemize}
-% \item Participant received second dose
-% \item Participant observed to be at risk for the COV-DIS endpoint at Day 15 after the second dose
-% \end{itemize}
-\item Group-sequential monitoring for benefit/efficacy: a group-sequential one-sided Wald test of $H_0$: $\mathrm{VE} \leq \Sexpr{effNullVE * 100}\%$ using the Cox model and the O'Brien-Fleming boundary
+-  2\% annual dropout in each arm
+-  2\% probability of a missed second dose (used in definition of the PP cohort)
+<!-- -  Criteria for PP cohort membership -->
+<!-- \begin{itemize} -->
+<!-- -  Participant received second dose -->
+<!-- -  Participant observed to be at risk for the COV-DIS endpoint at Day 15 after the second dose -->
+<!-- \end{itemize} -->
+-  Group-sequential monitoring for benefit/efficacy: a group-sequential one-sided Wald test of $H_0$: $\mathrm{VE} \leq `r effNullVE * 100`\%$ using the Cox model and the O'Brien-Fleming boundary
 \begin{itemize}
-\item Analyses performed when \Sexpr{atEventCount[1]} (\Sexpr{infFractionEff[1]}\% information fraction), \Sexpr{atEventCount[2]} (\Sexpr{infFractionEff[2]}\% information fraction), and \Sexpr{atEventCount[length(atEventCount)]} FAS-15d+ endpoints have been accrued (\Sexpr{atEventCount[length(atEventCount)]} is the target number for powering the trial for $\overline{VE}\textrm{(2--32)} = 60\%$)
-\item At the time of each analysis, testing of $H_0$ is performed in the FAS cohort including only FAS-15d+ endpoints
-\item Reject $H_0$ if the lower bound of the monitoring-adjusted 95\% Wald CI for VE is $> \Sexpr{effNullVE * 100}\%$
-\item 0.025 overall type 1 error rate for 3 one-sided tests (2 interim and a primary analysis)
+\item  Analyses performed when `r atEventCount[1]` (`r infFractionEff[1]`\% information fraction), `r atEventCount[2]` (`r infFractionEff[2]`\% information fraction), and `r atEventCount[length(atEventCount)]` FAS-15d+ endpoints have been accrued (`r atEventCount[length(atEventCount)]` is the target number for powering the trial for $\overline{VE}\textrm{(2--32)} = 60\%$)
+\item  At the time of each analysis, testing of $H_0$ is performed in the FAS cohort including only FAS-15d+ endpoints
+\item  Reject $H_0$ if the lower bound of the monitoring-adjusted 95\% Wald CI for VE is $> `r effNullVE * 100`\%$
+\item  0.025 overall type 1 error rate for 3 one-sided tests (2 interim and a primary analysis)
 \end{itemize}
-\item Interim monitoring for lack of benefit/non-efficacy: a one-sided Wald test of $H_0$: $\mathrm{VE} \geq \Sexpr{nonEffNullVE * 100}\%$ using the Cox model and nominal 95\%  confidence intervals following Freidlin, Korn, and Gray (2010, \textit{Clin Trials}) (referred to as the FKG approach)
+-  Interim monitoring for lack of benefit/non-efficacy: a one-sided Wald test of $H_0$: $\mathrm{VE} \geq `r nonEffNullVE * 100`\%$ using the Cox model and nominal 95\%  confidence intervals following Freidlin, Korn, and Gray (2010, *Clin Trials*) (referred to as the FKG approach)
 \begin{itemize}
-\item Analyses performed when approximately \Sexpr{atEventCountNonEff[1]} (\Sexpr{infFractionNonEff[1]}\% information fraction), \Sexpr{atEventCountNonEff[2]} (\Sexpr{infFractionNonEff[2]}\% information fraction), and \Sexpr{atEventCountNonEff[length(atEventCountNonEff)]} PP-15d+ endpoints have been accrued
-\item Timing of analyses harmonized with sequential monitoring for benefit/efficacy
-\item At the time of each analysis, testing of $H_0$ is performed in the PP cohort including only PP-15d+ endpoints
-\item Reject $H_0$ if the upper bound of the nominal 95\% Wald CI for VE is $< \Sexpr{nonEffNullVE * 100}\%$
-% \item Approximate 0.025 overall type 1 error rate for 3 one-sided tests
-% \item The overall type 1 error rate control is only approximate because the numbers of PP endpoints at the time of each analysis are random variables
-\item Nominal 0.025 type 1 error rate of each of the 3 one-sided tests
+\item  Analyses performed when approximately `r atEventCountNonEff[1]` (`r infFractionNonEff[1]`\% information fraction), `r atEventCountNonEff[2]` (`r infFractionNonEff[2]`\% information fraction), and `r atEventCountNonEff[length(atEventCountNonEff)]` PP-15d+ endpoints have been accrued
+\item  Timing of analyses harmonized with sequential monitoring for benefit/efficacy
+\item  At the time of each analysis, testing of $H_0$ is performed in the PP cohort including only PP-15d+ endpoints
+\item  Reject $H_0$ if the upper bound of the nominal 95\% Wald CI for VE is $< `r nonEffNullVE * 100`\%$
+% Approximate 0.025 overall type 1 error rate for 3 one-sided tests
+% The overall type 1 error rate control is only approximate because the numbers of PP endpoints at the time of each analysis are random variables
+\item  Nominal 0.025 type 1 error rate of each of the 3 one-sided tests
 \end{itemize}
 \newpage
-\item Summary of efficacy monitoring boundaries (using the Wald test)
-\begin{table}[H]
+-  Summary of efficacy monitoring boundaries (using the Wald test)
+\bigskip
 \setlength{\tabcolsep}{3pt}
-\begin{center}
-%\scalebox{0.85}{
+<!--\scalebox{0.85}{ -->
 \begin{tabular}{cccc}
 \hline \hline
 Information & \multicolumn{3}{c}{Efficacy Monitoring (O'B-F)}\\
-Fraction & \multicolumn{3}{c}{(Rejecting $H_0$: $\mathrm{VE} \leq \Sexpr{effNullVE * 100}\%$)}\\
+Fraction & \multicolumn{3}{c}{(Rejecting $H_0$: $\mathrm{VE} \leq `r effNullVE * 100`\%$)}\\
 \cline{2-4}
 (FAS-15d+ & Nominal & Est. VE (Est. HR) & Cum Prob of Crossing\\
-Endpoints) & Signif Level & at Bndary & Bndary if $\overline{VE}\textrm{(2--32)}=\Sexpr{effDesignAltVE * 100}\%$\\
+Endpoints) & Signif Level & at Bndary & Bndary if $\overline{VE}\textrm{(2--32)}=`r effDesignAltVE * 100`\%$\\
 \hline
-\Sexpr{infFractionEff[1]}\% (\Sexpr{atEventCount[1]}) & \Sexpr{nominalAlphaEff[1]} & $\mathrm{VE} \geq \Sexpr{VEboundEff[1]}\%$ & \Sexpr{cumProbCrossEff[1]}\%\\
- & & $\mathrm{HR} \leq \Sexpr{HRboundEff[1]}$ & \\
+`r infFractionEff[1]`\% (`r atEventCount[1]`) & `r nominalAlphaEff[1]` & $\mathrm{VE} \geq `r VEboundEff[1]`\%$ & `r cumProbCrossEff[1]`\%\\
+ & & $\mathrm{HR} \leq `r HRboundEff[1]`$ & \\
 \hline
-\Sexpr{infFractionEff[2]}\% (\Sexpr{atEventCount[2]}) & \Sexpr{nominalAlphaEff[2]} & $\mathrm{VE} \geq \Sexpr{VEboundEff[2]}\%$ & \Sexpr{cumProbCrossEff[2]}\%\\
- & & $\mathrm{HR} \leq \Sexpr{HRboundEff[2]}$ & \\
+`r infFractionEff[2]`\% (`r atEventCount[2]`) & `r nominalAlphaEff[2]` & $\mathrm{VE} \geq `r VEboundEff[2]`\%$ & `r cumProbCrossEff[2]`\%\\
+ & & $\mathrm{HR} \leq `r HRboundEff[2]`$ & \\
 \hline
-\Sexpr{infFractionEff[3]}\% (\Sexpr{atEventCount[3]}) & \Sexpr{nominalAlphaEff[3]} & $\mathrm{VE} \geq \Sexpr{VEboundEff[3]}\%$ & \Sexpr{cumProbCrossEff[3]}\%\\
- & & $\mathrm{HR} \leq \Sexpr{HRboundEff[3]}$ & \\
+`r infFractionEff[3]`\% (`r atEventCount[3]`) & `r nominalAlphaEff[3]` & $\mathrm{VE} \geq `r VEboundEff[3]`\%$ & `r cumProbCrossEff[3]`\%\\
+ & & $\mathrm{HR} \leq `r HRboundEff[3]`$ & \\
 \hline \hline
 \end{tabular}
-%}
-\end{center}
-\end{table}
-\item Summary of non-efficacy monitoring boundaries (using the Wald test)
-\begin{table}[H]
+\bigskip
+
+-  Summary of non-efficacy monitoring boundaries (using the Wald test)
+\bigskip
 \setlength{\tabcolsep}{3pt}
-\begin{center}
-%\scalebox{0.85}{
+<!--\scalebox{0.85}{ -->
 \begin{tabular}{cccc}
 \hline \hline
 Information & \multicolumn{3}{c}{Non-Efficacy Monitoring (FKG)}\\
-Fraction & \multicolumn{3}{c}{(Rejecting $H_0$: $\mathrm{VE} \geq \Sexpr{nonEffNullVE * 100}\%$)}\\
+Fraction & \multicolumn{3}{c}{(Rejecting $H_0$: $\mathrm{VE} \geq `r nonEffNullVE * 100`\%$)}\\
 \cline{2-4}
 (PP-15d+ & Nominal & Est. VE (Est. HR) & Cum Prob of Crossing\\
 Endpoints) & Signif Level & at Bndary & Bndary if $\overline{VE}\textrm{(2--32)}=0\%$\\
 \hline
-\Sexpr{infFractionNonEff[1]}\% (\Sexpr{atEventCountNonEff[1]}) & \Sexpr{nominalAlphaNonEff[1]} & $\mathrm{VE} \leq \Sexpr{VEboundNonEff[1]}\%$ & \Sexpr{cumProbCrossNonEff[1]}\%\\
- & & $\mathrm{HR} \geq \Sexpr{HRboundNonEff[1]}$ & \\
+`r infFractionNonEff[1]`\% (`r atEventCountNonEff[1]`) & `r nominalAlphaNonEff[1]` & $\mathrm{VE} \leq `r VEboundNonEff[1]`\%$ & `r cumProbCrossNonEff[1]`\%\\
+ & & $\mathrm{HR} \geq `r HRboundNonEff[1]`$ & \\
 \hline
-\Sexpr{infFractionNonEff[2]}\% (\Sexpr{atEventCountNonEff[2]}) & \Sexpr{nominalAlphaNonEff[2]} & $\mathrm{VE} \leq \Sexpr{VEboundNonEff[2]}\%$ & \Sexpr{cumProbCrossNonEff[2]}\%\\
- & & $\mathrm{HR} \geq \Sexpr{HRboundNonEff[2]}$ & \\
+`r infFractionNonEff[2]`\% (`r atEventCountNonEff[2]`) & `r nominalAlphaNonEff[2]` & $\mathrm{VE} \leq `r VEboundNonEff[2]`\%$ & `r cumProbCrossNonEff[2]`\%\\
+ & & $\mathrm{HR} \geq `r HRboundNonEff[2]`$ & \\
 \hline
-\Sexpr{infFractionNonEff[3]}\% (\Sexpr{atEventCountNonEff[3]}) & \Sexpr{nominalAlphaNonEff[3]} & $\mathrm{VE} \leq \Sexpr{VEboundNonEff[3]}\%$ & \Sexpr{cumProbCrossNonEff[3]}\%\\
- & & $\mathrm{HR} \geq \Sexpr{HRboundNonEff[3]}$ & \\
+`r infFractionNonEff[3]`\% (`r atEventCountNonEff[3]`) & `r nominalAlphaNonEff[3]` & $\mathrm{VE} \leq `r VEboundNonEff[3]`\%$ & `r cumProbCrossNonEff[3]`\%\\
+ & & $\mathrm{HR} \geq `r HRboundNonEff[3]`$ & \\
 \hline \hline
 \end{tabular}
-%}
-\end{center}
-\end{table}
-\item Cumulative probabilities of crossing the non-efficacy boundary at \Sexpr{paste0(atEventCountNonEff[1], ", ", atEventCountNonEff[2], ", and ", atEventCountNonEff[3])} PP-15d+ endpoints if $\overline{VE}\textrm{(2--32)}=\Sexpr{effDesignAltVE * 100}\%$ are \Sexpr{cumProbCrossNonEffUnderH1[1]}\%, \Sexpr{cumProbCrossNonEffUnderH1[2]}\%, and \Sexpr{cumProbCrossNonEffUnderH1[3]}\%
-\item Interim monitoring for potential vaccine harm/disease enhancement: monitoring-adjusted one-sided conditional exact binomial test of $H_0$: $p_v \geq N_v/N$, where $p_v$ is the binomial probability of assignment to the vaccine arm conditional on the observed number of endpoints, and $N_v/N$ is the proportion of participants randomized to the vaccine arm
+
+\bigskip
+
+-  Cumulative probabilities of crossing the non-efficacy boundary at `r paste0(atEventCountNonEff[1], ", ", atEventCountNonEff[2], ", and ", atEventCountNonEff[3])` PP-15d+ endpoints if $\overline{VE}\textrm{(2--32)}=`r effDesignAltVE * 100`\%$ are `r cumProbCrossNonEffUnderH1[1]`\%, `r cumProbCrossNonEffUnderH1[2]`\%, and `r cumProbCrossNonEffUnderH1[3]`\%
+-  Interim monitoring for potential vaccine harm/disease enhancement: monitoring-adjusted one-sided conditional exact binomial test of $H_0$: $p_v \geq N_v/N$, where $p_v$ is the binomial probability of assignment to the vaccine arm conditional on the observed number of endpoints, and $N_v/N$ is the proportion of participants randomized to the vaccine arm
 \begin{itemize}
-\item Starting at the 12$^{\textrm{th}}$ FAS-15d+ endpoint and then continuously (i.e., after each FAS-15d+ endpoint) until the first interim analysis for lack of benefit (at \Sexpr{atEventCount[1]} FAS-15d+ endpoints)
-\item 0.05 overall type 1 error rate and a constant nominal significance level of each test
+\item  Starting at the 12$^{\textrm{th}}$ FAS-15d+ endpoint and then continuously (i.e., after each FAS-15d+ endpoint) until the first interim analysis for lack of benefit (at `r atEventCount[1]` FAS-15d+ endpoints)
+\item  0.05 overall type 1 error rate and a constant nominal significance level of each test
 \end{itemize}
-\item 1000 Monte-Carlo iterations
-\end{itemize}
-%\vspace*{7mm}
+-  1000 Monte-Carlo iterations
+<!--\vspace*{7mm} -->
 
-% \newpage
-% {\Large Deviations in the Simulation Set-up from the Proposed Trial Design}
-% \begin{center}
-% \begin{tabular}{p{0.4\textwidth}p{0.4\textwidth}}
-% \hline \hline
-% Simulation Design & Proposed Trial Design\\
-% \hline
-% % Timing of interim and primary analyses and analysis cohorts count events in the FAS cohort starting $\geq 28 + 15$ days after the first vaccination & Timing of interim and primary analyses and analysis cohorts count events in the PP cohort starting $\geq 28 + 15$ days after the first vaccination\\
-% % \hline
-% Interim monitoring for lack of benefit based on Freidlin et al.'s nominal CI approach & Interim monitoring for lack of benefit based on the O'Brien-Fleming group-sequential test controlling the overall type 1 error rate at 0.025\\
-% \hline \hline
-% \end{tabular}
-% \end{center}
+<!-- \newpage -->
+<!-- {\Large Deviations in the Simulation Set-up from the Proposed Trial Design} -->
+<!-- \begin{center} -->
+<!-- \begin{tabular}{p{0.4\textwidth}p{0.4\textwidth}} -->
+<!-- \hline \hline -->
+<!-- Simulation Design & Proposed Trial Design\\ -->
+<!-- \hline -->
+<!-- Timing of interim and primary analyses and analysis cohorts count events in the FAS cohort starting $\geq 28 + 15$ days after the first vaccination & Timing of interim and primary analyses and analysis cohorts count events in the PP cohort starting $\geq 28 + 15$ days after the first vaccination\\ -->
+<!-- \hline -->
+<!-- Interim monitoring for lack of benefit based on Freidlin et al.'s nominal CI approach & Interim monitoring for lack of benefit based on the O'Brien-Fleming group-sequential test controlling the overall type 1 error rate at 0.025\\ -->
+<!-- \hline \hline -->
+<!-- \end{tabular} -->
+<!-- \end{center} -->
 
 
-% \begin{table}[H]
-% \centering
-% \caption{Interim monitoring O'Brien-Fleming boundaries for efficacy and inefficacy. Boundaries are shown on the hazard ratio (vaccine/placebo) scale, at interim analyses with information fractions 50\%, 75\%, and 100\% of the 90 COV-DIS events needed to power the study. Calculations are for analysis of the PP cohort counting endpoints $\geq 15$ days after the last vaccination.}
-% \begin{tabular}{ccc}
-% \hline \hline
-% Information Fraction & HR at Efficacy Boundary & HR at Inefficacy Boundary\\
-% (of Total Events) & (Rejecting $H_0^{\textrm{eff}}$: $\mathrm{HR} \geq 0.8$) & (Rejecting $H_0^{\textrm{ineff}}$: $\mathrm{HR} \leq 0.5$)\\
-% \hline
-% 50\% (45 events) & $\leq 0.3406$ ($\mathrm{VE} \geq 66\%$) & $\geq 1.1743$ ($\mathrm{VE} \leq -17\%$)\\
-% 75\% (68 events) & $\leq 0.4547$ ($\mathrm{VE} \geq 54\%$) & $\geq 0.8797$ ($\mathrm{VE} \leq 12\%$)\\
-% 100\% (90 events) & $\leq 0.5220$ ($\mathrm{VE} \geq 48\%$) & $\geq 0.7663$ ($\mathrm{VE} \leq 23\%$)\\
-% \hline \hline
-% \end{tabular}
-% \end{table}
+<!-- \begin{table}[H] -->
+<!-- \centering -->
+<!-- \caption{Interim monitoring O'Brien-Fleming boundaries for efficacy and inefficacy. Boundaries are shown on the hazard ratio (vaccine/placebo) scale, at interim analyses with information fractions 50\%, 75\%, and 100\% of the 90 COV-DIS events needed to power the study. Calculations are for analysis of the PP cohort counting endpoints $\geq 15$ days after the last vaccination.} -->
+<!-- \begin{tabular}{ccc} -->
+<!-- \hline \hline -->
+<!-- Information Fraction & HR at Efficacy Boundary & HR at Inefficacy Boundary\\ -->
+<!-- (of Total Events) & (Rejecting $H_0^{\textrm{eff}}$: $\mathrm{HR} \geq 0.8$) & (Rejecting $H_0^{\textrm{ineff}}$: $\mathrm{HR} \leq 0.5$)\\ -->
+<!-- \hline -->
+<!-- 50\% (45 events) & $\leq 0.3406$ ($\mathrm{VE} \geq 66\%$) & $\geq 1.1743$ ($\mathrm{VE} \leq -17\%$)\\ -->
+<!-- 75\% (68 events) & $\leq 0.4547$ ($\mathrm{VE} \geq 54\%$) & $\geq 0.8797$ ($\mathrm{VE} \leq 12\%$)\\ -->
+<!-- 100\% (90 events) & $\leq 0.5220$ ($\mathrm{VE} \geq 48\%$) & $\geq 0.7663$ ($\mathrm{VE} \leq 23\%$)\\ -->
+<!-- \hline \hline -->
+<!-- \end{tabular} -->
+<!-- \end{table} -->
 
 \newpage
-<<label=tableOutcomeProbs, results='asis'>>=
+```{r label=tableOutcomeProbs, results='asis'}
 # 'aveVE.vector' determines what results are reported in each row
 aveVE.vector <- c(-2, -1.5, -1, -0.5, 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9)
 
@@ -341,7 +352,8 @@ res1 <- res[, -(5:6)]
 print(xtable(res1, 
              align=rep(c("c","c","c"), c(5, ifelse(!is.null(lowerVEuncPower), length(lowerVEuncPower), 0), 1)), 
              digits=c(1,1,1,rep(1, NCOL(res1) - 2)), 
-             caption=paste0("Probabilities ($\\times 100$) of reaching each possible trial monitoring outcome",ifelse(!is.null(lowerVEuncPower), paste0(" and unconditional power ($\\times 100$) to reject $H_0$: $VE \\leq ", lowerVEuncPower * 100, "\\%$ in the FAS and PP cohorts counting only FAS-15d+ and PP-15d+ endpoints, respectively,"),"")," for a 2-arm study design with ",N.pla," placebo and ",N.vax," vaccine recipients")
+             caption=paste0("Probabilities ($\\times 100$) of reaching each possible trial monitoring outcome",ifelse(!is.null(lowerVEuncPower), paste0(" and unconditional power ($\\times 100$) to reject $H_0$: $VE \\leq ", lowerVEuncPower * 100, "\\%$ in the FAS and PP cohorts counting only FAS-15d+ and PP-15d+ endpoints, respectively,"),"")," for a 2-arm study design with ",N.pla," placebo and ",N.vax," vaccine recipients"),
+             comment=FALSE
              ), 
       #scalebox=ifelse(!is.null(lowerVEuncPower),0.85,1),
       math.style.negative=TRUE,
@@ -362,11 +374,11 @@ print(xtable(res1,
                                   \\multicolumn{", 5+length(lowerVEuncPower),"}{l}{\\footnotesize Cox model-based efficacy monitoring with O'Brien-Fleming boundaries (FAS-15d+ endpoints)} \\\\\n
                                   \\multicolumn{", 5+length(lowerVEuncPower), "}{l}{\\footnotesize ", ifelse(estimand=="combined", "Cox \\& cumulative incidence-based non-efficacy monitoring}", ifelse(estimand=="cuminc", "Cumulative incidence-based non-efficacy monitoring incl. post-1.5 months PP monitoring", "Cox model-based non-efficacy monitoring with nominal CIs (PP-15d+ endpoints)}")), " \\\\\n 
                                   \\multicolumn{", 5+length(lowerVEuncPower), "}{l}{\\footnotesize ", ifelse(estimand=="cox", "Cox model-based unconditional power", "Cumulative incidence-based FAS unconditional power"),"}"))))
-@
+```
 
 \begin{figure}[H]
 \begin{center}
-<<label=plotOutcomeProbs, results='asis', fig.width=10, fig.asp=0.7, out.width='95%'>>=
+```{r label=plotOutcomeProbs, results='asis', fig.width=10, fig.asp=0.7, out.width='95%'}
 res <- subset(res, aveHR<=1)
   
 par(mar=c(4.5,5,3,1.5), las=1, cex.axis=1.2, cex.lab=1.3, cex.main=1.2)
@@ -395,12 +407,12 @@ text(0.6, 0.25,
      paste0(
        "N=",N.pla,":",N.vax," pla:vax\n3-month uniform accrual\n",format(infRate*100, digits=2, nsmall=2),"% annual pla incidence\n2% annual dropout\nCox model O'Brien-Fleming eff\n    monitoring (FAS-15d+ endpoints)\n",ifelse(estimand=="combined","Cox & cum inc-based ",ifelse(estimand=="cuminc","Cum inc ","Cox model ")), "FKG non-eff\n    monitoring (PP-15d+ endpoints)\n", ifelse(estimand=="cox","Cox model uncond power","Cum inc uncond power")), cex=1, pos=4)
 cat("\\caption{Probabilities of reaching each possible trial monitoring outcome",ifelse(!is.null(lowerVEuncPower), paste0(", and unconditional powers to reject $H_0$: $VE \\leq ", lowerVEuncPower * 100, "\\%$ in the FAS and PP cohorts counting only FAS-15d+ and PP-15d+ endpoints, respectively,"),"")," for a 2-arm study design with ",N.pla," placebo and ",N.vax," vaccine recipients}", sep="")
-@
+```
 \end{center}
 \end{figure}
 
 \newpage
-<<label=tableProbMeetEffByAnalysisNumber, results='asis'>>=
+```{r label=tableProbMeetEffByAnalysisNumber, results='asis'}
 df <- data.frame(aveVE=paste0(aveVE.vector * 100, "%"), pEffA1=0, pEffA2=0, pEffA3=0)
 
 for (i in 1:length(aveVE.vector)){
@@ -424,15 +436,16 @@ print(xtable(df,
       add.to.row=list(pos=list(0, NROW(df)), 
                       command=c(paste0("\\hline \\hline  & \\multicolumn{3}{c}{Rejecting $\\mathrm{VE} \\leq ", effNullVE * 100, "\\%$} \\\\\n 
                                 \\cline{2-4} $\\overline{VE}$(2--32) & 1$^{\\textrm{st}}$ IA & 2$^{\\textrm{nd}}$ IA & Prim A \\\\\n \\hline"),
-                                "\\hline \\hline"))
+                                "\\hline \\hline")),
+      comment=FALSE
       )
-@
+```
 
 
 \begin{comment}
 \begin{figure}[H]
 \begin{center}
-<<label=plotUncPowerPP, fig.width=10, fig.asp=0.7, out.width='95%', eval=ifelse(file.exists(file.path(srcDir, paste0("VEpwPP_nPlac=",N.pla,"_nVacc=",N.vax,"_infRate=",format(infRate, digits=3, nsmall=3),".RData"))), TRUE, FALSE)>>=
+```{r label=plotUncPowerPP, fig.width=10, fig.asp=0.7, out.width='95%', eval=ifelse(file.exists(file.path(srcDir, paste0("VEpwPP_nPlac=",N.pla,"_nVacc=",N.vax,"_infRate=",format(infRate, digits=3, nsmall=3),".RData"))), TRUE, FALSE)}
 #fullVE <- function(aveVE, vePeriods){ aveVE * (vePeriods[3]-1)/((vePeriods[3]-1)-(vePeriods[2]-1)/2) }
 
 pwrPP.filename <- paste0("VEpwPP_nPlac=",N.pla,"_nVacc=",N.vax,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")
@@ -460,7 +473,7 @@ text(0, 0.7,
      cex=1, pos=4)
 legend(0.55, 0.4, lty=ltyNames, col=colNames, lwd=3, title="Probability of >=1\nmissed vaccination",
        legend=paste0(c(0,5,10),"%"), bty="n", cex=1.2)
-@
+```
 \caption{Unconditional power to reject the null hypothesis H$_0$: $VE(\textrm{1.5--6})\leq 20\%$ in per-protocol cohorts with a varying probability of $\geq 1$ missed vaccination}
 \end{center}
 \end{figure}
@@ -470,7 +483,7 @@ legend(0.55, 0.4, lty=ltyNames, col=colNames, lwd=3, title="Probability of >=1\n
 \newpage
 \begin{figure}[H]
 \begin{center}
-<<label=plotTimeToReportingPrimaryResult_v1, fig.width=10, fig.asp=0.7, out.width='95%', eval=ifelse(file.exists(file.path(srcDir, "decisionTimes.RData")), TRUE, FALSE)>>=
+```{r label=plotTimeToReportingPrimaryResult_v1, fig.width=10, fig.asp=0.7, out.width='95%', eval=ifelse(file.exists(file.path(srcDir, "decisionTimes.RData")), TRUE, FALSE)}
 # a list named 'decisionTimes'
 load(file.path(srcDir, "decisionTimes.RData"))
 probs <- c(0.2, 0.5, 0.8)
@@ -487,7 +500,7 @@ ggplot(qTimes, aes(x=aveVE, y=q0.5)) +
   scale_x_continuous(breaks=seq(0, 0.8, by=0.1), labels=seq(0, 80, by=10), minor_breaks=NULL) +
   scale_y_continuous(breaks=15:28, minor_breaks=NULL) +
   theme_bw()
-@
+```
 \caption{Median time to reporting the primary analysis result}
 \end{center}
 \end{figure}
@@ -496,7 +509,7 @@ ggplot(qTimes, aes(x=aveVE, y=q0.5)) +
 \newpage
 \begin{figure}[H]
 \begin{center}
-<<label=plotTimeToReportingPrimaryResult_v2, fig.width=6, fig.asp=0.7, out.width='95%'>>=
+```{r label=plotTimeToReportingPrimaryResult_v2, fig.width=6, fig.asp=0.7, out.width='95%'}
 # a list named 'decisionTimes'
 monitorTrialFile <- paste0("monitorTrial_nPlac=", N.pla, "_nVacc=", N.vax, "_aveVE=", aveVE.vector, "_infRate=", infRate.fmt, "_cox.RData")
 times <- decisionTimes(monitorTrialFile, monitorTrialDir=srcDir)
@@ -512,7 +525,7 @@ ggplot(dframe, aes(x=aveVE, y=times)) +
   scale_y_continuous(breaks=seq(4, 32, by=2), expand=c(0.02, 0.02), sec.axis=dup_axis(name=NULL)) +
   coord_cartesian(ylim=c(3, 32)) +
   theme_bw()
-@
+```
 \caption{Probability distribution of time (in weeks) since trial start to crossing the harm, nonefficacy or efficacy boundary or reaching the target number of endpoints if no boundary is crossed. The diamonds show the mean.}
 \end{center}
 \end{figure}
@@ -520,7 +533,7 @@ ggplot(dframe, aes(x=aveVE, y=times)) +
 
 
 \newpage
-<<label=tableEventSplitAndNominalCIAtVE, results='asis', eval=ifelse(file.exists(file.path(srcDir, "eventSplits.RData")), TRUE, FALSE)>>=
+```{r label=tableEventSplitAndNominalCIAtVE, results='asis', eval=ifelse(file.exists(file.path(srcDir, "eventSplits.RData")), TRUE, FALSE)}
 # a list named 'eventSplits with 1 component for each VE level
 load(file.path(srcDir, "eventSplits.RData"))
 
@@ -547,15 +560,16 @@ print(xtable(tableEventSplitAndCI,
       hline.after=NULL,
       add.to.row=list(pos=list(0, NROW(tableEventSplitAndCI)), 
                       command=c("\\hline \\hline Ave & & \\multicolumn{2}{c}{VE} \\\\\n \\cline{3-4} VE & Vaccine: & 95\\% LB & 95\\% UB \\\\\n (\\%) & Placebo* & (\\%) & (\\%) \\\\\n \\hline", 
-                                "\\hline \\hline \\multicolumn{4}{l}{\\footnotesize $^{\\ast}$ Median endpoint counts}"))
+                                "\\hline \\hline \\multicolumn{4}{l}{\\footnotesize $^{\\ast}$ Median endpoint counts}")),
+      comment=FALSE
       )
-@
+```
 
 
 \newpage
 \begin{figure}[H]
 \begin{center}
-<<label=plotDuration1VaxArmEvaluation, fig.width=10, fig.asp=0.7, out.width='95%'>>=
+```{r label=plotDuration1VaxArmEvaluation, fig.width=10, fig.asp=0.7, out.width='95%'}
 stage2 <- 108
 cumProbTrialDuration1VaxArm <- function(simTrial.filename, monitorTrial.filename, dirname, stage2=stage2){
   load(file.path(dirname, simTrial.filename))
@@ -614,12 +628,12 @@ text(18, 0.4,
 text(x=3, y=0.4, labels="Accrual\ncompleted", cex=1.2, pos=2)
 text(x=4, y=0.95, labels="Vaccinations\ncompleted", cex=1.2, pos=2)  
 #text(x=14, y=0.95, labels="Vaccinations through\nmonth 2 completed", cex=1.2, pos=2)
-@
-\caption{Distribution of trial duration with 25 months of follow-up ($n=$\Sexpr{format(N.pla, scientific=FALSE)} in the placebo arm and $n=$\Sexpr{format(N.vax, scientific=FALSE)} in the vaccine arm)}
+```
+\caption{Distribution of trial duration with 25 months of follow-up ($n=$`r format(N.pla, scientific=FALSE)` in the placebo arm and $n=$`r format(N.vax, scientific=FALSE)` in the vaccine arm)}
 \end{center}
 \end{figure}
 
-<<label=plotTrialDuration, results='asis', fig.width=10, fig.asp=0.7, out.width='95%'>>=
+```{r label=plotTrialDuration, results='asis', fig.width=10, fig.asp=0.7, out.width='95%'}
 cumProbTrialDuration <- function(trialDataCens.filename, dirname, stage2=156){
   load(file.path(dirname, trialDataCens.filename))
 
@@ -673,10 +687,10 @@ if (N.vax.arms>1){
   cat("\\end{center}")
   cat("\\end{figure}")
 }
-@
+```
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atEvents_q0.5, results='asis'>>=
+```{r label=tabEventAccrual_VE0.6_atEvents_q0.5, results='asis'}
 aveVE <- 0.6
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -704,12 +718,12 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Endpoints in the FAS cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")), comment=FALSE)
+```
 
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atEvents_q0.8, results='asis'>>=
+```{r label=tabEventAccrual_VE0.6_atEvents_q0.8, results='asis'}
 aveVE <- 0.6
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -737,12 +751,12 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Endpoints in the FAS cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")), comment=FALSE)
+```
 
 
 \newpage
-<<label=tabEventAccrual_VE0.8_atEvents_q0.5, results='asis'>>=
+```{r label=tabEventAccrual_VE0.8_atEvents_q0.5, results='asis'}
 aveVE <- 0.8
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -770,12 +784,12 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Endpoints in the FAS cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")), comment=FALSE)
+```
 
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atWeeks_q0.5, results='asis', eval=FALSE>>=
+```{r label=tabEventAccrual_VE0.6_atWeeks_q0.5, results='asis', eval=FALSE}
 aveVE <- 0.6
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -801,11 +815,11 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Median endpoints in the FAS cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Median endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")), comment=FALSE)
+```
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atWeeks_q0.8, results='asis', eval=ifelse(file.exists(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData"))), TRUE, FALSE)>>=
+```{r label=tabEventAccrual_VE0.6_atWeeks_q0.8, results='asis', eval=ifelse(file.exists(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData"))), TRUE, FALSE)}
 aveVE <- 0.6
 pMissVax <- 0.02
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",format(infRate, digits=3, nsmall=3),".RData")),
@@ -831,12 +845,12 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ 20$^{\\textrm{th}}$ percentile endpoints in the FAS cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ 20$^{\\textrm{th}}$ percentile endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")), comment=FALSE)
+```
 
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atWeeks_q0.5_infRate0.005, results='asis', eval=FALSE>>=
+```{r label=tabEventAccrual_VE0.6_atWeeks_q0.5_infRate0.005, results='asis', eval=FALSE}
 aveVE <- 0.6
 pMissVax <- 0.02
 infRate1 <- 0.5 * infRate
@@ -864,12 +878,12 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Median endpoints in the FAS cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Median endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")), comment=FALSE)
+```
 
 
 \newpage
-<<label=tabEventAccrual_VE0.6_atWeeks_q0.5_infRate0.01, results='asis', eval=FALSE>>=
+```{r label=tabEventAccrual_VE0.6_atWeeks_q0.5_infRate0.01, results='asis', eval=FALSE}
 aveVE <- 0.6
 pMissVax <- 0.02
 infRate1 <- 0.75 * infRate
@@ -897,12 +911,12 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Median endpoints in the FAS cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Median endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>14$ days after completed immunization}")), comment=FALSE)
+```
 
 
 \newpage
-<<label=tableNvaccInfPostM6WithMonitor, results='asis'>>=
+```{r label=tableNvaccInfPostM6WithMonitor, results='asis'}
 infThroughWeekVec <- c(7, 13) * 52 / 12
 pMissVax <- 0.02
 
@@ -951,13 +965,14 @@ for (infThroughWeek in infThroughWeekVec){
                         command=c(paste0("\\hline \\hline & \\multicolumn{7}{c}{Percentiles of distribution of \\# of} \\\\\n & \\multicolumn{7}{c}{COV-DIS endpoints in vax arm} \\\\\n \\cline{2-8}"),
                                   paste0("Mean & 1\\% & 5\\% & 25\\% & 50\\% & 75\\% & 95\\% & 99\\% \\\\\n  \\hline \\multicolumn{8}{c}{Month 0.5--",infThroughWeek*12/52," COV-DIS endpoints in the FAS cohort} \\\\\n"),
                                   paste0("\\hline \\multicolumn{8}{c}{Month 1.5--",infThroughWeek*12/52," COV-DIS endpoints in PP* cohort} \\\\\n"),
-                                  paste0("\\hline \\hline \\multicolumn{8}{l}{\\footnotesize N=",N.pla,":",N.vax," Placebo:vaccine arm} \\\\\n \\multicolumn{8}{l}{\\footnotesize ", format(infRate * 100, digits=2, nsmall=2),"\\% annual incidence rate in placebo arm} \\\\\n \\multicolumn{8}{l}{\\footnotesize $\\overline{VE}\\textrm{(2--32)} = ", aveVE*100, "\\%$} \\\\\n \\multicolumn{8}{l}{\\footnotesize 2\\% dropout rate in each arm} \\\\\n \\multicolumn{8}{l}{\\footnotesize *",pMissVax*100,"\\% probability of a missed second dose}")))
-        )  
+                                  paste0("\\hline \\hline \\multicolumn{8}{l}{\\footnotesize N=",N.pla,":",N.vax," Placebo:vaccine arm} \\\\\n \\multicolumn{8}{l}{\\footnotesize ", format(infRate * 100, digits=2, nsmall=2),"\\% annual incidence rate in placebo arm} \\\\\n \\multicolumn{8}{l}{\\footnotesize $\\overline{VE}\\textrm{(2--32)} = ", aveVE*100, "\\%$} \\\\\n \\multicolumn{8}{l}{\\footnotesize 2\\% dropout rate in each arm} \\\\\n \\multicolumn{8}{l}{\\footnotesize *",pMissVax*100,"\\% probability of a missed second dose}"))),
+        comment=FALSE
+        )
 }
-@
+```
 
 \newpage
-<<label=tableMITTfailureSplitAndCIAtVE, results='asis'>>=
+```{r label=tableMITTfailureSplitAndCIAtVE, results='asis'}
 infThroughWeek <- 7 * 52 / 12
 pMissVax <- 0.02
 p <- 0.5
@@ -1011,13 +1026,14 @@ print(xtable(tableMITTfailureSplitAndCI,
       hline.after=NULL,
       add.to.row=list(pos=list(0, NROW(tableMITTfailureSplitAndCI)), 
                       command=c("\\hline \\hline Ave & & \\multicolumn{2}{c}{VE} \\\\\n \\cline{3-4} VE(0--6) & Vaccine: & 95\\% LB$^{\\dagger}$ & 95\\% UB$^{\\dagger}$ \\\\\n (\\%) & Placebo* & (\\%) & (\\%) \\\\\n \\hline", 
-                                "\\hline \\hline \\multicolumn{4}{l}{\\footnotesize $^{\\ast}$ Median endpoint counts} \\\\\n \\multicolumn{4}{l}{\\footnotesize $^{\\dagger}$ Under proportional hazards}"))
+                                "\\hline \\hline \\multicolumn{4}{l}{\\footnotesize $^{\\ast}$ Median endpoint counts} \\\\\n \\multicolumn{4}{l}{\\footnotesize $^{\\dagger}$ Under proportional hazards}")),
+      comment=FALSE
       )
-@
+```
 
 \begin{comment}
 \newpage
-<<label=tableNinfStage1, results='asis'>>=
+```{r label=tableNinfStage1, results='asis'}
 aveVE <- c(0, 0.6)
 p <- c(0.01, 0.025, 0.05, seq(0.1,0.9,by=0.1), 0.95, 0.975, 0.99)
 
@@ -1044,7 +1060,8 @@ print(xtable(res,
       include.colnames=FALSE,
       scalebox=0.85,
       hline.after=0,
-      add.to.row=list(pos=list(-1,0,NROW(res)), command=c("\\hline \\hline & \\multicolumn{15}{c}{Percentiles of distribution of number of Month 0--24 endpoints} \\\\\n","VE(0-6) & 1\\% & 2.5\\% & 5\\% & 10\\% & 20\\% & 30\\% & 40\\% & 50\\% & 60\\% & 70\\% & 80\\% & 90\\% & 95\\% & 97.5\\% & 99\\% \\\\\n",paste0("\\hline \\hline \\multicolumn{16}{l}{\\footnotesize N=",N.pla,":",paste(rep(N.vax,N.vax.arms),collapse=":")," control:",paste(rep("experimental vaccine",N.vax.arms),collapse=":")," group} \\\\\n \\multicolumn{16}{l}{\\footnotesize 3-month accrual} \\\\\n \\multicolumn{16}{l}{\\footnotesize ",infRate*100,"\\% annual incidence in the control vaccine group} \\\\\n \\multicolumn{16}{l}{\\footnotesize 5\\% annual dropout}")))
+      add.to.row=list(pos=list(-1,0,NROW(res)), command=c("\\hline \\hline & \\multicolumn{15}{c}{Percentiles of distribution of number of Month 0--24 endpoints} \\\\\n","VE(0-6) & 1\\% & 2.5\\% & 5\\% & 10\\% & 20\\% & 30\\% & 40\\% & 50\\% & 60\\% & 70\\% & 80\\% & 90\\% & 95\\% & 97.5\\% & 99\\% \\\\\n",paste0("\\hline \\hline \\multicolumn{16}{l}{\\footnotesize N=",N.pla,":",paste(rep(N.vax,N.vax.arms),collapse=":")," control:",paste(rep("experimental vaccine",N.vax.arms),collapse=":")," group} \\\\\n \\multicolumn{16}{l}{\\footnotesize 3-month accrual} \\\\\n \\multicolumn{16}{l}{\\footnotesize ",infRate*100,"\\% annual incidence in the control vaccine group} \\\\\n \\multicolumn{16}{l}{\\footnotesize 5\\% annual dropout}"))),
+      comment=FALSE
       )
 
 
@@ -1091,12 +1108,13 @@ print(xtable(res,
         include.colnames=FALSE,
         scalebox=0.85,
         hline.after=NULL,
-        add.to.row=list(pos=list(-1,0,NROW(res)), command=c("\\hline \\hline & \\multicolumn{15}{c}{Percentiles of distribution of number of Month 0--6 endpoints} \\\\\n","VE(0-6) & 1\\% & 2.5\\% & 5\\% & 10\\% & 20\\% & 30\\% & 40\\% & 50\\% & 60\\% & 70\\% & 80\\% & 90\\% & 95\\% & 97.5\\% & 99\\% \\\\\n  \\hline", paste0("\\hline \\hline \\multicolumn{16}{l}{\\footnotesize N=",N.pla,":",paste(rep(N.vax,N.vax.arms),collapse=":")," control:",paste(rep("experimental  vaccine",N.vax.arms),collapse=":")," group} \\\\\n \\multicolumn{16}{l}{\\footnotesize 3-month accrual} \\\\\n \\multicolumn{16}{l}{\\footnotesize ",infRate*100,"\\% annual incidence in the control vaccine group} \\\\\n \\multicolumn{16}{l}{\\footnotesize 5\\% dropout rate in each group} \\\\\n \\multicolumn{16}{l}{\\footnotesize Cumulative incidence-based non-efficacy monitoring}")))
+        add.to.row=list(pos=list(-1,0,NROW(res)), command=c("\\hline \\hline & \\multicolumn{15}{c}{Percentiles of distribution of number of Month 0--6 endpoints} \\\\\n","VE(0-6) & 1\\% & 2.5\\% & 5\\% & 10\\% & 20\\% & 30\\% & 40\\% & 50\\% & 60\\% & 70\\% & 80\\% & 90\\% & 95\\% & 97.5\\% & 99\\% \\\\\n  \\hline", paste0("\\hline \\hline \\multicolumn{16}{l}{\\footnotesize N=",N.pla,":",paste(rep(N.vax,N.vax.arms),collapse=":")," control:",paste(rep("experimental  vaccine",N.vax.arms),collapse=":")," group} \\\\\n \\multicolumn{16}{l}{\\footnotesize 3-month accrual} \\\\\n \\multicolumn{16}{l}{\\footnotesize ",infRate*100,"\\% annual incidence in the control vaccine group} \\\\\n \\multicolumn{16}{l}{\\footnotesize 5\\% dropout rate in each group} \\\\\n \\multicolumn{16}{l}{\\footnotesize Cumulative incidence-based non-efficacy monitoring}"))),
+        comment=FALSE
         )
-@
+```
 \end{comment}
 
-<<label=tableNoneffBoundary, results='asis'>>=
+```{r label=tableNoneffBoundary, results='asis'}
 # 'VEest' solves the equation 'log HRest - 1.96 * sqrt(4/d) = log(1 - UB)' for log HRest and then outputs the transformation 1 - exp(log HRest)
 # 1:1 randomization ratio
 VEest <- function(n, UB){ 1 - exp(log(1 - UB) + qnorm(0.975) * sqrt(9 / (2 * n))) }
@@ -1177,74 +1195,10 @@ tableNoneffBoundary <- data.frame(nPP=nPP, splitPP=paste0(nPP - nPlaAtBoundaryPP
 # # number of Rotarix ITT endpoints required for binomial RVE=-45% given the total number of ITT endpoints is 71 (10)
 # n0 <- round((N.pla * 71) / (N.vax * (1 + abs(RVEest)) + N.pla), digits=0)
 # 1 - ((71-n0)/N.vax)/(n0/N.pla)
-@
-
-\begin{comment}
-\newpage
-\begin{figure}[H]
-\begin{center}
-<<label=plotNonEffStopBounds, fig.width=5, fig.height=3.8>>=
-par(mar=c(5.5,5,1,1), las=1, cex.axis=1.1, cex.lab=1.2)
-plot(-10,0, xlim=c(0,240), ylim=c(-100,20), xaxt="n", xlab="", ylab="", type="n")
-mtext("Total Number of Infections by Month 18\n(Placebo + 1 Vaccine Arm)", side=1, line=3.5, cex=1.2)
-mtext("Vaccine Efficacy (%)", side=2, line=2.5, cex=1.2, las=0)
-axis(side=1, at=seq(0,240,by=20))
-axis(side=2, at=seq(-25,20,by=5))
-axis(side=3, at=seq(0,240,by=20), labels=FALSE)
-axis(side=4, at=seq(-25,20,by=5), labels=FALSE)
-for (i in 1:length(Ninf)){
-  segments(x0=Ninf[i], y0=-30, y1=VEhat[i], lwd=2, col="darkred")
-}
-points(Ninf, VEhat, pch=19, col="darkred", cex=0.6)
-lines(Ninf, VEhat, col="darkred")
-text(5, 15, "Non-Efficacy\nStopping Boundaries", adj=0, cex=1.1, font=2, col="blue")
-@
-\end{center}
-\end{figure}
-\end{comment}
-
-<<label=tableNonEffInfSplits, results='asis'>>=
-print(xtable(tableNoneffBoundary,
-             align=rep("r", 4),
-             digits=rep(0, 4),
-             caption="COV-DIS endpoint splits occurring $\\geq 15$ days after the last vaccination in the PP cohort, and point estimates of VE at the non-efficacy boundary using Freidlin et al.'s nominal CI approach"
-             ),
-      math.style.negative=TRUE,
-      include.rownames=FALSE,
-      include.colnames=FALSE,
-      caption.placement="top",
-      hline.after=NULL,
-      add.to.row=list(pos=list(0, NROW(tableNoneffBoundary)), 
-                      command=c("\\hline \\hline Total & Vaccine: & Est. VE \\\\\n 
-                                Endpoints$^{\\dagger}$ & Placebo$^{\\ast}$ & (\\%) \\\\\n 
-                                \\hline ", 
-                                "\\hline \\hline 
-                                \\multicolumn{3}{l}{\\footnotesize $^{\\ast}$ Under $\\mathrm{VE} := 1 - \\textrm{vax-arm attack rate} \\big/$} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $ \\big/ \\textrm{pla-arm attack rate}$} \\\\\n 
-                                \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Scenario with $\\textrm{VE} = 0\\%$}"))
-      )
-@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-% Below is the original seqDesign Report Template:
+```
 
 \newpage
-<<label=tabEventAccrual_atEvents_q0.5, results='asis', eval=FALSE>>=
+```{r label=tabEventAccrual_atEvents_q0.5, results='asis', eval=FALSE}
 aveVE <- 0.4
 pMissVax <- 0.05
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
@@ -1273,11 +1227,11 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Endpoints in the MITT cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>0$ weeks after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $\\geq 26$ weeks after enrollment}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $\\geq 26$ weeks after enrollment}")), comment=FALSE)
+```
 
 \newpage
-<<label=tabEventAccrual_atEvents_q0.8, results='asis', eval=FALSE>>=
+```{r label=tabEventAccrual_atEvents_q0.8, results='asis', eval=FALSE}
 aveVE <- 0.4
 pMissVax <- 0.05
 prob=0.8
@@ -1307,12 +1261,12 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Endpoints in the MITT cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>0$ weeks after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $\\geq 26$ weeks after enrolment}"))))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $\\geq 26$ weeks after enrolment}"))), comment=FALSE)
+```
 
 
 \newpage
-<<label=tabEventAccrual_atWeeks_q0.5, results='asis', eval=FALSE>>=
+```{r label=tabEventAccrual_atWeeks_q0.5, results='asis', eval=FALSE}
 aveVE <- 0.6
 pMissVax <- 0.05
 tableEventAccrual <- tabEventAccrual(file.path(srcDir, paste0("simTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=",aveVE,"_infRate=",infRate,".RData")),
@@ -1338,12 +1292,12 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Median endpoints in the MITT cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>0$ weeks after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ Median endpoints in the PP cohort starting} \\\\\n
-                                \\multicolumn{3}{l}{\\footnotesize \\quad $>26$ weeks after enrollment}")))
-@
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $>26$ weeks after enrollment}")), comment=FALSE
+```
 
 
 \newpage
-<<label=tabEventAccrual_atWeeks_q0.8, results='asis', eval=FALSE>>=
+```{r label=tabEventAccrual_atWeeks_q0.8, results='asis', eval=FALSE}
 aveVE <- 0.6
 pMissVax <- 0.05
 prob <- 0.2
@@ -1371,10 +1325,10 @@ print(xtable(tableEventAccrual,
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>0$ weeks after enrollment} \\\\\n 
                                 \\multicolumn{3}{l}{\\footnotesize $^{\\ddag}$ ", prob * 100, "$^{\\textrm{th}}$ percentile of endpoints in the PP cohort starting} \\\\\n
                                 \\multicolumn{3}{l}{\\footnotesize \\quad $>26$ weeks after enrollment}"))))
-@
+```
 
 \newpage
-<<label=tableRankSelect, results='asis', eval=FALSE>>=
+```{r label=tableRankSelect, results='asis', eval=FALSE}
 aveVEsets=matrix(c(0.4,0,
                    0.4,0.2,
                    0.4,0.3,
@@ -1419,18 +1373,18 @@ for (type in typeVec){
         add.to.row=list(pos=list(-1,0,nRows), command=c(paste0("\\hline \\hline & Power ($\\times 100$) & \\\\\n True average VE (\\%)$^1$ & ",ifelse(type=="head","Vx1 vs. Vx2","Vx3-4 vs. Vx1-2")," \\& & Probability ($\\times 100$) \\\\\n"),paste0("(Vx1, Vx2) & ",ifelse(type=="head","Vx1 vs. Placebo","Vx3-4 vs. Placebo"),"$^2$ & select best ",ifelse(type=="head","vaccine","pooled Vx"),"$^3$ \\\\\n"),paste0("\\hline\\hline \\multicolumn{3}{l}{\\footnotesize $^1$ VE halved in the first 6 months} \\\\\n \\multicolumn{3}{l}{\\footnotesize $^2$ Cumulative incidence-based Wald tests of both ",ifelse(type=="head","Vx1/Vx2","Vx3-4/Vx1-2")," and} \\\\\n \\multicolumn{3}{l}{\\footnotesize \\; \\,",ifelse(type=="head","Vx1/Placebo","Vx3-4/Placebo")," VE(0--18) with 1-sided $\\alpha=0.025$} \\\\\n \\multicolumn{3}{l}{\\footnotesize $^3$ Correct selection $=$ ",ifelse(type=="head","Vx1","pooled Vx3-4")," has highest estimated VE(0--36) and} \\\\\n \\multicolumn{3}{l}{\\footnotesize \\; \\, VE(0--18) significantly $>0\\%$} \\\\\n \\multicolumn{3}{l}{\\footnotesize N=",N.pla,":",paste(rep(N.vax,N.vax.arms),collapse=":")," pla:",paste(rep("vac",N.vax.arms),collapse=":")," group} \\\\\n \\multicolumn{3}{l}{\\footnotesize 18-month accrual; average 309 per month} \\\\\n \\multicolumn{3}{l}{\\footnotesize ",infRate*100,"\\% annual incidence in the placebo group} \\\\\n \\multicolumn{3}{l}{\\footnotesize 5\\% annual dropout} \\\\\n \\multicolumn{3}{l}{\\footnotesize Cumulative incidence-based monitoring}")))
         )
 }    
-@
+```
 
 
 \newpage
 
 \begin{figure}[H]
 \begin{center}
-<<label=plotHarmStopBounds, fig.width=5, fig.height=3.8, eval=ifelse(file.exists(file.path(srcDir, paste0("harmBounds_N=60_alphaPerTest=0.0140_pVacc=",round(N.vax/(N.pla+N.vax),2),".csv"))), TRUE, FALSE)>>=
+```{r label=plotHarmStopBounds, fig.width=5, fig.height=3.8, eval=FALSE}
 harmData <- read.csv(file.path(srcDir, paste0("harmBounds_N=60_alphaPerTest=0.0140_pVacc=",round(N.vax/(N.pla+N.vax),2),".csv")))
 harmData <- subset(harmData, N>=10)
 par(mar=c(5.5,5,1,1), las=1, cex.axis=1.1, cex.lab=1.2)
-plot(-10,0, xlim=c(10,60), ylim=c(9,40), xaxt="n", yaxt="n", xlab="", ylab="", type="n")
+{plot(-10,0, xlim=c(10,60), ylim=c(9,40), xaxt="n", yaxt="n", xlab="", ylab="", type="n")
 mtext("Total Number of Infections\n(Placebo + 1 Vaccine Arm)", side=1, line=3.5, cex=1.2)
 mtext("Number of Vaccine Infections\n(1 Vaccine Arm)", side=2, line=2.5, cex=1.2, las=0)
 axis(side=1, at=seq(10,60,by=5))
@@ -1439,18 +1393,18 @@ axis(side=3, at=seq(10,60,by=5), labels=FALSE)
 axis(side=4, at=seq(10,40,by=5), labels=FALSE)
 abline(0,1, col="gray30")
 text(28,32,"Y=X", col="gray30")
-points(harmData$N, harmData$V, pch=19, col="darkred", cex=0.5)
+points(harmData$N, harmData$V, pch=19, col="darkred", cex=0.5)}
 for (i in c(20,40,60)){
   segments(x0=i, y0=8, y1=harmData$V[harmData$N==i], lwd=2, lty="dashed", col="darkorange")
   segments(x0=10, x1=i, y0=harmData$V[harmData$N==i], lwd=2, lty="dashed", col="darkorange")
 }
 text(42, 21, "Potential Harm\nStopping\nBoundaries", adj=0, cex=1.1, font=2, col="blue")
-@
+```
 \end{center}
 \end{figure}
 
 
-<<label=tableInfSplits, results='asis', eval=ifelse(file.path(srcDir,paste0("monitorTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=0.2_infRate=",infRate,"_",estimand,".RData")), TRUE, FALSE)>>=
+```{r label=tableInfSplits, results='asis', eval=ifelse(file.exists(file.path(srcDir,paste0("monitorTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=0.2_infRate=",infRate,"_",estimand,".RData"))), TRUE, FALSE)}
 VEbinomModel <- function(p, r){ 1 - r*p/(1-p) }
 
 UL95 <- function(pHat, n, r, bound){ VEbinomModel(pHat, r) + qnorm(0.975)*sqrt(pHat*(r^2)/(n*((1-pHat)^3))) - bound }
@@ -1477,6 +1431,51 @@ nVax <- round(pHat*nInf,0)
 nSplitVaxPla <- paste0(nVax,":",nInf-nVax)
 VEhat <- VEbinomModel(pHat, randRatio)*100
 tableInfSplits <- data.frame(nInf, nSplitVaxPla, round(VEhat,0))
-@
+```
 
-\end{document}
+\begin{comment}
+\newpage
+\begin{figure}[H]
+\begin{center}
+```{r label=plotNonEffStopBounds, fig.width=5, fig.height=3.8, eval=ifelse(file.exists(file.path(srcDir,paste0("monitorTrial_nPlac=",N.pla,"_nVacc=",N.vax,"_aveVE=0.2_infRate=",infRate,"_",estimand,".RData"))), TRUE, FALSE)}
+par(mar=c(5.5,5,1,1), las=1, cex.axis=1.1, cex.lab=1.2)
+plot(-10,0, xlim=c(0,240), ylim=c(-100,20), xaxt="n", xlab="", ylab="", type="n")
+mtext("Total Number of Infections by Month 18\n(Placebo + 1 Vaccine Arm)", side=1, line=3.5, cex=1.2)
+mtext("Vaccine Efficacy (%)", side=2, line=2.5, cex=1.2, las=0)
+axis(side=1, at=seq(0,240,by=20))
+axis(side=2, at=seq(-25,20,by=5))
+axis(side=3, at=seq(0,240,by=20), labels=FALSE)
+axis(side=4, at=seq(-25,20,by=5), labels=FALSE)
+for (i in 1:length(Ninf)){
+  segments(x0=Ninf[i], y0=-30, y1=VEhat[i], lwd=2, col="darkred")
+}
+points(Ninf, VEhat, pch=19, col="darkred", cex=0.6)
+lines(Ninf, VEhat, col="darkred")
+text(5, 15, "Non-Efficacy\nStopping Boundaries", adj=0, cex=1.1, font=2, col="blue")
+```
+\end{center}
+\end{figure}
+\end{comment}
+
+```{r label=tableNonEffInfSplits, results='asis'}
+print(xtable(tableNoneffBoundary,
+             align=rep("r", 4),
+             digits=rep(0, 4),
+             caption="COV-DIS endpoint splits occurring $\\geq 15$ days after the last vaccination in the PP cohort, and point estimates of VE at the non-efficacy boundary using Freidlin et al.'s nominal CI approach"
+             ),
+      math.style.negative=TRUE,
+      include.rownames=FALSE,
+      include.colnames=FALSE,
+      caption.placement="top",
+      hline.after=NULL,
+      add.to.row=list(pos=list(0, NROW(tableNoneffBoundary)), 
+                      command=c("\\hline \\hline Total & Vaccine: & Est. VE \\\\\n 
+                                Endpoints$^{\\dagger}$ & Placebo$^{\\ast}$ & (\\%) \\\\\n 
+                                \\hline ", 
+                                "\\hline \\hline 
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\ast}$ Under $\\mathrm{VE} := 1 - \\textrm{vax-arm attack rate} \\big/$} \\\\\n
+                                \\multicolumn{3}{l}{\\footnotesize \\quad $ \\big/ \\textrm{pla-arm attack rate}$} \\\\\n 
+                                \\multicolumn{3}{l}{\\footnotesize $^{\\dagger}$ Scenario with $\\textrm{VE} = 0\\%$}"))
+      )
+```
+
