@@ -11,16 +11,18 @@ monitorTrial(
   harmMonitorRange,
   harmMonitorAlpha = 0.05,
   alphaPerTest = NULL,
-  nonEffStartMethod = c("FKG", "fixed", "?", "old"),
+  nonEffStartMethod = c("FKG", "fixed"),
   nonEffStartParams = NULL,
   nonEffIntervalUnit = c("counts", "time"),
   nonEffInterval,
   nonEffCohorts = list(times = NULL, timeUnit = "counts", timingCohort = list(lagTime =
     NULL, cohortInd = NULL), cohort1 = list(estimand = "cox", lagTime = NULL, cohortInd =
-    NULL, nullVE = NULL, nominalAlphas = c(0.003, 0.0183, 0.044))),
-  effCohort = list(times = c(52, 77, 103), timeUnit = "counts", timingCohort =
-    list(lagTime = NULL, cohortInd = NULL), nullVE = 0.2, estimand = "cox", lagTime = 2,
-    cohortInd = "pp1", nominalAlphas = c(0.003, 0.0183, 0.044)),
+    NULL, nullVE = NULL, nominalAlphas = NULL)),
+  effCohort = list(times = NULL, timeUnit = "counts", timingCohort = list(lagTime =
+    NULL, cohortInd = NULL), nullVE = NULL, estimand = "cox", lagTime = NULL, cohortInd =
+    NULL, nominalAlphas = NULL),
+  stage1Eff = list(cohort = list(lagTime = 0, cohortInd = NULL), nullVE = NULL,
+    nominalAlpha = NULL, estimand = "cox"),
   lowerVEnoneff = NULL,
   highVE,
   stage1VE,

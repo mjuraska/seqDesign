@@ -19,7 +19,7 @@ output:
 
 \clearpage
 
-```{r label=inputParameters, results='asis', echo=FALSE, warning=FALSE, message=FALSE}
+```{r label=setup, results='asis', echo=FALSE, warning=FALSE, message=FALSE}
 rm(list=ls(all=TRUE))
 
 knitr::opts_chunk$set(echo=FALSE, message=FALSE, warning=FALSE, cache=TRUE, fig.align='center', fig.width=8, fig.asp=0.5, out.width='100%')
@@ -38,9 +38,11 @@ if (Sys.getenv("USERNAME")=="mjuraska"){
 } else {
   source("C:/Users/brian/OneDrive/Documents/R/source_seqDesign.R")  
 }
+```
 
 
-# THE BELOW USER-SPECIFIED VALUES ARE AUTOMATICALLY APPLIED TO THE ENTIRE REPORT ------------------
+```{r label=manualInputParams}
+# THE BELOW USER-SPECIFIED INPUT PARAMETERS ARE AUTOMATICALLY APPLIED TO THE ENTIRE REPORT ------------------
 
 # a directory storing output from simTrial, monitorTrial, and censTrial
 srcDir <- paste0(ifelse(Sys.getenv("USERNAME")=="mjuraska", "u:", "v:"), "/bsimpkin/seqDesign/Routput/NIAID/1to1VtoPratio/v5")
@@ -58,51 +60,78 @@ eventTarget <- 197
 infFractionEff <- c(0.35, 0.7, 1)
 atEventCount <- ceiling(infFractionEff * eventTarget)
 
-# interim monitoring for lack of benefit/non-efficacy in the PP cohort
+# interim monitoring for lack of benefit/non-efficacy
 eventTargetNonEff <- 130
 infFractionNonEff <- c(0.2, 0.6, 1)
 atEventCountNonEff <- ceiling(infFractionNonEff * eventTargetNonEff)
 
 estimand <- "cox"
 
-# efficacy monitoring: one-sided Wald test of H0: VE <= effNullVE
+### efficacy monitoring ----------------------
+# one-sided Wald test of H0: VE <= effNullVE
 effNullVE <- 0.3
+
+# VE design alternative for powering the study
 effDesignAltVE <- 0.6
-cumProbCrossEff.monitorTrialFile <- paste0("monitorTrial_nPlac=", N.pla, "_nVacc=", N.vax, "_aveVE=", effDesignAltVE, "_infRate=", infRate.fmt, "_cox.RData")
 
-# non-efficacy monitoring: one-sided Wald test of H0: VE >= nonEffNullVE
+# boundary type: options are "OBF" or "Pocock"
+effBound <- "OBF"
+
+# overall one-sided alpha
+effAlpha <- 0.025
+
+# monitorTrial's output file name for the VE design alternative scenario used for computing cumulative probability of crossing efficacy boundary
+cumProbCrossEff.monitorTrialFile <- paste0("monitorTrial_nPlac=", N.pla, "_nVacc=", N.vax, "_aveVE=", effDesignAltVE, "_infRate=", infRate.fmt, "_", estimand, ".RData")
+
+### non-efficacy monitoring ------------------
+# one-sided Wald test of H0: VE >= nonEffNullVE
 nonEffNullVE <- 0.5
-cumProbCrossNonEff.monitorTrialFile <- paste0("monitorTrial_nPlac=", N.pla, "_nVacc=", N.vax, "_aveVE=0_infRate=", infRate.fmt, "_cox.RData")
-cumProbCrossNonEffUnderH1.monitorTrialFile <- paste0("monitorTrial_nPlac=", N.pla, "_nVacc=", N.vax, "_aveVE=", effDesignAltVE, "_infRate=", infRate.fmt, "_cox.RData")
 
-# a numeric vector if unconditional powers to reject null hypotheses H0: VE(0-stage1) <= lowerVEuncPower[i]*100% should be reported; NULL otherwise
-lowerVEuncPower <- effNullVE
+# boundary type: options are "FKG", "OBF" or "Pocock"
+nonEffBound <- "FKG"
+
+# overall one-sided alpha
+nonEffAlpha <- 0.025
+
+# monitorTrial's output file name for the VE = 0 scenario used for computing cumulative probability of crossing non-efficacy boundary
+cumProbCrossNonEff.monitorTrialFile <- paste0("monitorTrial_nPlac=", N.pla, "_nVacc=", N.vax, "_aveVE=0_infRate=", infRate.fmt, "_", estimand, ".RData")
+
+# monitorTrial's output file name for the VE design alternative scenario used for computing cumulative probability of crossing non-efficacy boundary
+cumProbCrossNonEffUnderH1.monitorTrialFile <- paste0("monitorTrial_nPlac=", N.pla, "_nVacc=", N.vax, "_aveVE=", effDesignAltVE, "_infRate=", infRate.fmt, "_", estimand, ".RData")
 
 # END OF USER-SPECIFIED VALUES --------------------------------------------------------------------
+```
 
 
-### efficacy boundary characterization
+```{r label=derivedInputParams}
+### efficacy boundary characterization -----------------------
 # *one-sided* nominal significance levels for efficacy
-tmp <- bounds(t=infFractionEff, iuse=1, alpha=0.025)
+tmp <- bounds(t=infFractionEff, iuse=ifelse(effBound=="OBF", 1, 2), alpha=effAlpha)
 nominalAlphaEff <- 1 - pnorm(tmp$upper.bounds)
 
 # previously, RCTdesign was used
 # load(file.path(srcDir, paste0("monitoringBoundariesAt", paste(atEventCount, collapse="_"), "events.RData")))
 # HRboundEff <- bounds$eff
+# HRboundNonEff <- bounds$noneff
+
 HRboundEff <- estHRbound(boundType="eff", nullHR=1 - effNullVE, alpha=2 * nominalAlphaEff, nEvents=atEventCount, randFrac=N.vax / (N.vax + N.pla))
+
 cumProbCrossEff <- crossBoundCumProb(boundType="eff", nAnalyses=length(infFractionEff),
                                      monitorTrialFile=cumProbCrossEff.monitorTrialFile,
                                      monitorTrialDir=srcDir)
 
 
-### non-efficacy boundary characterization
+### non-efficacy boundary characterization -------------------
 # *one-sided* nominal significance levels for non-efficacy
-# tmp <- bounds(t=infFractionNonEff, iuse=1, alpha=0.025)
-# nominalAlphaNonEff <- 1 - pnorm(tmp$upper.bounds)
-nominalAlphaNonEff <- rep(0.025, 3)
+if (nonEffBound=="FKG"){
+  nominalAlphaNonEff <- rep(nonEffAlpha, 3)  
+} else {
+  tmp <- bounds(t=infFractionNonEff, iuse=ifelse(nonEffBound=="OBF", 1, 2), alpha=nonEffAlpha)
+  nominalAlphaNonEff <- 1 - pnorm(tmp$upper.bounds)  
+}
 
-# HRboundNonEff <- bounds$noneff
 HRboundNonEff <- estHRbound(boundType="nonEff", nullHR=1 - nonEffNullVE, alpha=2 * nominalAlphaNonEff, nEvents=atEventCountNonEff, randFrac=N.vax / (N.vax + N.pla))
+
 cumProbCrossNonEff <- crossBoundCumProb(boundType="nonEff", nAnalyses=length(infFractionNonEff),
                                         monitorTrialFile=cumProbCrossNonEff.monitorTrialFile,
                                         monitorTrialDir=srcDir)
@@ -115,14 +144,15 @@ cumProbCrossNonEffUnderH1 <- crossBoundCumProb(boundType="nonEff", nAnalyses=len
 N <- N.pla + N.vax
 infFractionEff <- infFractionEff * 100
 nominalAlphaEff <- format(round(nominalAlphaEff, digits=6), nsmall=6)
-VEboundEff <- format((1 - HRboundEff) * 100, digits=1, nsmall=1)
-HRboundEff <- format(HRboundEff, digits=4, nsmall=4)
+effVE <- format((1 - HRboundEff) * 100, digits=1, nsmall=1)
+# HRboundEff <- format(HRboundEff, digits=4, nsmall=4)
 cumProbCrossEff <- format(cumProbCrossEff * 100, digits=1, nsmall=1)
 
 infFractionNonEff <- infFractionNonEff * 100
 nominalAlphaNonEff <- format(round(nominalAlphaNonEff, digits=3), nsmall=3)
-VEboundNonEff <- ifelse(is.na(HRboundNonEff), "n/a", format((1 - HRboundNonEff) * 100, digits=1, nsmall=1))
-HRboundNonEff <- ifelse(is.na(HRboundNonEff), "n/a", format(HRboundNonEff, digits=4, nsmall=4))
+nonEffVE <- format((1 - HRboundNonEff) * 100, digits=1, nsmall=1)
+
+# HRboundNonEff <- ifelse(is.na(HRboundNonEff), "n/a", format(HRboundNonEff, digits=4, nsmall=4))
 cumProbCrossNonEff <- format(cumProbCrossNonEff * 100, digits=1, nsmall=1)
 cumProbCrossNonEffUnderH1 <- ifelse(cumProbCrossNonEffUnderH1<0.001, "$<0.1$", format(cumProbCrossNonEffUnderH1 * 100, digits=1, nsmall=1))
 ```
@@ -181,8 +211,8 @@ Time Period & \\
 * Summary of efficacy monitoring boundaries (using the Wald test)
 ```{r, results='asis'}
 tab <- data.frame(atEventCount, infFractionEff=paste0(infFractionEff, "\\%"), nominalAlphaEff, 
-                  estVE=ifelse(grepl("NA", VEboundEff), "NA", paste0("$\\mathrm{VE} \\geq ", VEboundEff, "\\%$")),
-                  estHR=ifelse(grepl("NA", HRboundEff), "NA", paste0("$\\mathrm{HR} \\leq ", HRboundEff, "$")),
+                  estVE=paste0("$\\mathrm{VE} \\geq ", effVE[, 1], "\\%$"),
+                  ciVE=paste0("$(", effVE[, 3], "\\%, ", effVE[, 2], "\\%)$"),
                   cumProbCross=paste0(cumProbCrossEff, "\\%"))
 
 print(xtable(tab,
@@ -200,17 +230,18 @@ print(xtable(tab,
                                         & & \\multicolumn{4}{c}{Efficacy Monitoring (O'Brien-Fleming)} \\\\\n
                                         &  & \\multicolumn{4}{c}{(Rejecting $H_0$: $\\mathrm{VE} \\leq ", effNullVE * 100, "\\%$)} \\\\\n
                                        \\cline{3-6}
-                                       FAS-15d+ & Inf & Nominal & Est. VE & Est. HR & Cum Prob of Crossing \\\\\n
+                                       FAS-15d+ & Inf & Nominal & Est. VE & Adj. ", (1 - 2 * effAlpha) * 100, "\\% CI* & Cum Prob of Crossing \\\\\n
                                        Endpoints & Frac & Signif Level & at Bndary & at Bndary & Bndary if $\\overline{VE}\\textrm{(2--32)}=", effDesignAltVE * 100, "\\%$ \\\\\n
                                        \\hline "),
-                                "\\hline \\hline")))
+                                paste0("\\hline \\hline
+                                       \\multicolumn{6}{l}{\\footnotesize * Group-sequential monitoring-adjusted ", (1 - 2 * effAlpha) * 100, "\\% CI}"))))
 ```
 
 *  Summary of non-efficacy monitoring boundaries (using the Wald test)
 ```{r, results='asis'}
 tab <- data.frame(atEventCountNonEff, infFractionNonEff=paste0(infFractionNonEff, "\\%"), nominalAlphaNonEff, 
-                  estVE=ifelse(grepl("NA", VEboundNonEff), "NA", paste0("$\\mathrm{VE} \\leq ", VEboundNonEff, "\\%$")),
-                  estHR=ifelse(grepl("NA", HRboundNonEff), "NA", paste0("$\\mathrm{HR} \\geq ", HRboundNonEff, "$")),
+                  estVE=paste0("$\\mathrm{VE} \\leq ", nonEffVE[, 1], "\\%$"),
+                  ciVE=paste0("$(", nonEffVE[, 3], "\\%, ", nonEffVE[, 2], "\\%)$"),
                   cumProbCross=paste0(cumProbCrossNonEff, "\\%"))
 
 print(xtable(tab,
@@ -228,10 +259,11 @@ print(xtable(tab,
                                         & & \\multicolumn{4}{c}{Non-Efficacy Monitoring (FKG)} \\\\\n
                                         &  & \\multicolumn{4}{c}{(Rejecting $H_0$: $\\mathrm{VE} \\geq ", nonEffNullVE * 100, "\\%$)} \\\\\n
                                        \\cline{3-6}
-                                       PP-15d+ & Inf & Nominal & Est. VE & Est. HR & Cum Prob of Crossing \\\\\n
+                                       PP-15d+ & Inf & Nominal & Est. VE & ", ifelse(nonEffBound=="FKG", "", "Adj. "), (1 - 2 * effAlpha) * 100,"\\% CI* & Cum Prob of Crossing \\\\\n
                                        Endpoints & Frac & Signif Level & at Bndary & at Bndary & Bndary if $\\overline{VE}\\textrm{(2--32)}=0\\%$ \\\\\n
                                        \\hline "),
-                                "\\hline \\hline")))
+                                paste0("\\hline \\hline
+                                       \\multicolumn{6}{l}{\\footnotesize * ", ifelse(nonEffBound=="FKG", "Nominal ", "Group-sequential monitoring-adjusted "), (1 - 2 * nonEffAlpha) * 100, "\\% CI}"))))
 ```
 
 * Cumulative probabilities of crossing the non-efficacy boundary at `r paste0(atEventCountNonEff[1], ", ", atEventCountNonEff[2], ", and ", atEventCountNonEff[3])` PP-15d+ endpoints if $\overline{VE}\textrm{(2--32)}=`r effDesignAltVE * 100`\%$ are `r cumProbCrossNonEffUnderH1[1]`\%, `r cumProbCrossNonEffUnderH1[2]`\%, and `r cumProbCrossNonEffUnderH1[3]`\%
@@ -253,11 +285,11 @@ res <- as.data.frame(matrix(0, ncol=6, nrow=length(aveVE.vector)))
 colnames(res) <- c("aveVE", "aveHR", "harm", "noneffInterim", "noneffFinal", "higheff")
 res[,1] <- paste0(aveVE.vector*100,"%")
 res[,2] <- 1 - aveVE.vector
-if (!is.null(lowerVEuncPower)){ designPower <- as.data.frame(matrix(0, nrow=length(aveVE.vector), ncol=length(lowerVEuncPower))) }
-colnames(designPower) <- paste0("design",1:length(lowerVEuncPower))
+if (!is.null(effNullVE)){ designPower <- as.data.frame(matrix(0, nrow=length(aveVE.vector), ncol=length(effNullVE))) }
+colnames(designPower) <- paste0("design",1:length(effNullVE))
 powerPP <- numeric(length(aveVE.vector))
 
-# extract the estimated probabilities of each trial outcome and, if desired, unconditional power to reject H0 defined by 'lowerVEuncPower' from the output of 'monitorTrial'
+# extract the estimated probabilities of each trial outcome and, if desired, unconditional power to reject H0 defined by 'effNullVE' from the output of 'monitorTrial'
 row <- 0
 for (aveVE in aveVE.vector){
   row <- row + 1
@@ -269,10 +301,10 @@ for (aveVE in aveVE.vector){
   res[row,3:6] <- bounds.freq[c("Harm","NonEffInterim","NonEffFinal","HighEff")] 
   res[row,] <- ifelse(is.na(res[row,]), 0, res[row,])
   
-  if (!is.null(lowerVEuncPower)){ 
+  if (!is.null(effNullVE)){ 
     altDetectedMatrix <- do.call("rbind",lapply(out, function(oneTrial){ oneTrial[[1]]$altDetected }))
     if (is.null(altDetectedMatrix)){
-      designPower[row,] <- numeric(length(lowerVEuncPower))
+      designPower[row,] <- numeric(length(effNullVE))
     } else {
       designPower[row,] <- colSums(altDetectedMatrix, na.rm=TRUE)/length(out) 
     }    
@@ -289,7 +321,7 @@ for (aveVE in aveVE.vector){
 
 res$noneff <- res$noneffInterim + res$noneffFinal
 res <- subset(res, select=c("aveVE","aveHR","harm","noneffInterim","noneffFinal","noneff"))
-if (!is.null(lowerVEuncPower)){ res <- data.frame(res, designPower) }
+if (!is.null(effNullVE)){ res <- data.frame(res, designPower) }
 
 # add unconditional power to reject H0: VE<=20% in the PP cohort (counting PP events starting at 28 + 15 days after enrollment)
 #res$powerPP <- c(0, 0, 0, 0, 0.002, 0.007, 0.031, 0.070, 0.232, 0.532, 0.889, 0.984, 1)
@@ -300,12 +332,12 @@ res1 <- res[, -(5:6)]
 
 # prints a table with probabilities of reaching each trial monitoring outcome and unconditional power to reject H0
 print(xtable(res1, 
-             align=rep(c("c","c","c"), c(5, ifelse(!is.null(lowerVEuncPower), length(lowerVEuncPower), 0), 1)), 
+             align=rep(c("c","c","c"), c(5, ifelse(!is.null(effNullVE), length(effNullVE), 0), 1)), 
              digits=c(1,1,1,rep(1, NCOL(res1) - 2)), 
-             caption=paste0("Probabilities ($\\times 100$) of reaching each possible trial monitoring outcome",ifelse(!is.null(lowerVEuncPower), paste0(" and unconditional power ($\\times 100$) to reject $H_0$: $VE \\leq ", lowerVEuncPower * 100, "\\%$ in the FAS and PP cohorts counting only FAS-15d+ and PP-15d+ endpoints, respectively,"),"")," for a 2-arm study design with ",N.pla," placebo and ",N.vax," vaccine recipients"),
+             caption=paste0("Probabilities ($\\times 100$) of reaching each possible trial monitoring outcome",ifelse(!is.null(effNullVE), paste0(" and unconditional power ($\\times 100$) to reject $H_0$: $VE \\leq ", effNullVE * 100, "\\%$ in the FAS and PP cohorts counting only FAS-15d+ and PP-15d+ endpoints, respectively,"),"")," for a 2-arm study design with ",N.pla," placebo and ",N.vax," vaccine recipients"),
              comment=FALSE
              ), 
-      #scalebox=ifelse(!is.null(lowerVEuncPower),0.85,1),
+      #scalebox=ifelse(!is.null(effNullVE),0.85,1),
       math.style.negative=TRUE,
       caption.placement="top", 
       include.rownames=FALSE, 
@@ -313,23 +345,23 @@ print(xtable(res1,
       comment=FALSE,
       hline.after=4, 
       add.to.row=list(pos=list(0, NROW(res1)), 
-                      command=c(paste0("\\hline \\hline  &  & Harm &  Non-eff ", ifelse(!is.null(lowerVEuncPower), paste0("& ", paste0("\\multicolumn{", length(lowerVEuncPower) + 1, "}{c}{Uncond Power} ")), ""), "\\\\\n \\cline{5-6} 
-                                       $\\overline{VE}$(2--32) & $\\overline{HR}$(2--32) & FAS$^{\\ddag}$ VE$<0\\%$ & PP$^{\\dagger}$ VE$<$", nonEffNullVE * 100, "\\% & FAS$^{\\ddag}$ VE$>$", lowerVEuncPower * 100, "\\% & PP$^{\\dagger}$ VE$>$", lowerVEuncPower * 100, "\\% \\\\\n \\hline"), 
+                      command=c(paste0("\\hline \\hline  &  & Harm &  Non-eff ", ifelse(!is.null(effNullVE), paste0("& ", paste0("\\multicolumn{", length(effNullVE) + 1, "}{c}{Uncond Power} ")), ""), "\\\\\n \\cline{5-6} 
+                                       $\\overline{VE}$(2--32) & $\\overline{HR}$(2--32) & FAS$^{\\ddag}$ VE$<0\\%$ & PP$^{\\dagger}$ VE$<$", nonEffNullVE * 100, "\\% & FAS$^{\\ddag}$ VE$>$", effNullVE * 100, "\\% & PP$^{\\dagger}$ VE$>$", effNullVE * 100, "\\% \\\\\n \\hline"), 
                                 paste0(
                                   "\\hline \\hline 
-                                  \\multicolumn{", 5+length(lowerVEuncPower), "}{l}{\\footnotesize $^{\\dagger}$ PP cohort counting only PP-15d+ endpoints} \\\\\n
-                                  \\multicolumn{", 5+length(lowerVEuncPower), "}{l}{\\footnotesize $^{\\ddag}$ FAS cohort counting only FAS-15d+ endpoints} \\\\\n
-                                  \\multicolumn{", 5+length(lowerVEuncPower), "}{l}{\\footnotesize N=", N.pla, ":", N.vax, " placebo:vaccine group} \\\\\n 
-                                  \\multicolumn{", 5+length(lowerVEuncPower),"}{l}{\\footnotesize ", format(infRate*100, digits=2, nsmall=2), "\\% annual incidence rate in placebo group} \\\\\n 
-                                  \\multicolumn{", 5+length(lowerVEuncPower),"}{l}{\\footnotesize 2\\% annual dropout rate in each group} \\\\\n
-                                  \\multicolumn{", 5+length(lowerVEuncPower),"}{l}{\\footnotesize Cox model-based efficacy monitoring with O'Brien-Fleming boundaries (FAS-15d+ endpoints)} \\\\\n
-                                  \\multicolumn{", 5+length(lowerVEuncPower), "}{l}{\\footnotesize ", ifelse(estimand=="combined", "Cox \\& cumulative incidence-based non-efficacy monitoring}", ifelse(estimand=="cuminc", "Cumulative incidence-based non-efficacy monitoring incl. post-1.5 months PP monitoring", "Cox model-based non-efficacy monitoring with nominal CIs (PP-15d+ endpoints)}")), " \\\\\n 
-                                  \\multicolumn{", 5+length(lowerVEuncPower), "}{l}{\\footnotesize ", ifelse(estimand=="cox", "Cox model-based unconditional power", "Cumulative incidence-based FAS unconditional power"),"}"))))
+                                  \\multicolumn{", 5+length(effNullVE), "}{l}{\\footnotesize $^{\\dagger}$ PP cohort counting only PP-15d+ endpoints} \\\\\n
+                                  \\multicolumn{", 5+length(effNullVE), "}{l}{\\footnotesize $^{\\ddag}$ FAS cohort counting only FAS-15d+ endpoints} \\\\\n
+                                  \\multicolumn{", 5+length(effNullVE), "}{l}{\\footnotesize N=", N.pla, ":", N.vax, " placebo:vaccine group} \\\\\n 
+                                  \\multicolumn{", 5+length(effNullVE),"}{l}{\\footnotesize ", format(infRate*100, digits=2, nsmall=2), "\\% annual incidence rate in placebo group} \\\\\n 
+                                  \\multicolumn{", 5+length(effNullVE),"}{l}{\\footnotesize 2\\% annual dropout rate in each group} \\\\\n
+                                  \\multicolumn{", 5+length(effNullVE),"}{l}{\\footnotesize Cox model-based efficacy monitoring with O'Brien-Fleming boundaries (FAS-15d+ endpoints)} \\\\\n
+                                  \\multicolumn{", 5+length(effNullVE), "}{l}{\\footnotesize ", ifelse(estimand=="combined", "Cox \\& cumulative incidence-based non-efficacy monitoring}", ifelse(estimand=="cuminc", "Cumulative incidence-based non-efficacy monitoring incl. post-1.5 months PP monitoring", "Cox model-based non-efficacy monitoring with nominal CIs (PP-15d+ endpoints)}")), " \\\\\n 
+                                  \\multicolumn{", 5+length(effNullVE), "}{l}{\\footnotesize ", ifelse(estimand=="cox", "Cox model-based unconditional power", "Cumulative incidence-based FAS unconditional power"),"}"))))
 ```
 
 \clearpage
 
-```{r label=plotOutcomeProbs, results='asis', fig.width=10, fig.asp=0.7, out.width='95%', fig.cap=paste0("Probabilities of reaching each possible trial monitoring outcome", ifelse(!is.null(lowerVEuncPower), paste0(", and unconditional powers to reject $H_0$: $VE \\leq ", lowerVEuncPower * 100, "\\%$ in the FAS and PP cohorts counting only FAS-15d+ and PP-15d+ endpoints, respectively,"),""), " for a 2-arm study design with ", N.pla, " placebo and ", N.vax, " vaccine recipients")}
+```{r label=plotOutcomeProbs, results='asis', fig.width=10, fig.asp=0.7, out.width='95%', fig.cap=paste0("Probabilities of reaching each possible trial monitoring outcome", ifelse(!is.null(effNullVE), paste0(", and unconditional powers to reject $H_0$: $VE \\leq ", effNullVE * 100, "\\%$ in the FAS and PP cohorts counting only FAS-15d+ and PP-15d+ endpoints, respectively,"),""), " for a 2-arm study design with ", N.pla, " placebo and ", N.vax, " vaccine recipients")}
 res <- subset(res, aveHR<=1)
   
 par(mar=c(4.5,5,3,1.5), las=1, cex.axis=1.2, cex.lab=1.3, cex.main=1.2)
@@ -342,8 +374,8 @@ abline(h=c(0.05, 0.9), lwd=2, col="gray60")
 with(res, lines(1-aveHR, harm/100, type="b", lwd=3.5, lty="solid", col="darkorange"))
 #with(res, lines(1-aveHR, higheff/100, type="b", lwd=3.5, lty="longdash", col="red3"))
 with(res, lines(1-aveHR, noneffInterim/100, type="b", lwd=3.5, lty="dotdash", col="red3"))
-if (!is.null(lowerVEuncPower)){
-  for (i in 1:length(lowerVEuncPower)){ lines(1-res$aveHR, res[,paste0("design",i)]/100, type="b", lwd=3.5, lty="solid", col="black") }
+if (!is.null(effNullVE)){
+  for (i in 1:length(effNullVE)){ lines(1-res$aveHR, res[,paste0("design",i)]/100, type="b", lwd=3.5, lty="solid", col="black") }
 }  
 with(res, lines(1-aveHR, powerPP/100, type="b", lwd=3.5, lty="longdash", col="magenta3"))
   

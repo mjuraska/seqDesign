@@ -9,16 +9,16 @@ estHRbound(boundType = c("eff", "nonEff"), nullHR, alpha, nEvents, randFrac)
 \arguments{
 \item{boundType}{a character string specifying if the one-sided null hypothesis is of the form \eqn{H_0: \theta \geq \theta_0} (\code{"eff"}, default) or \eqn{H_0: \theta \leq \theta_0} (\code{"nonEff"}), where \eqn{\theta} is the hazard ratio and \eqn{\theta_0} is specified by \code{nullHR}}
 
-\item{nullHR}{a nonnegative numeric value specifying the hazard ratio, \eqn{\theta_0}, under the null hypothesis}
+\item{nullHR}{a nonnegative numeric value specifying the hazard ratio, \eqn{\theta_0}, under the null hypothesis. If the null hypothesis differs across multiple analyses, \code{nullHR} may be a numeric vector of equal length as \code{alpha}.}
 
-\item{alpha}{a numeric vector of nominal significance levels (e.g., those defined by the O'Brien-Fleming group-sequential test)}
+\item{alpha}{a numeric vector of two-sided nominal significance levels (e.g., those defined by the O'Brien-Fleming group-sequential test)}
 
-\item{nEvents}{a numeric vector of numbers of events at which analyses is performed. The lengths of \code{alpha} and \code{nEvents} must be the same, and the components of the two vectors must correspond to each other.}
+\item{nEvents}{a numeric vector of numbers of events at which analyses are performed. The lengths of \code{alpha} and \code{nEvents} must be the same, and the components of the two vectors must correspond to each other.}
 
 \item{randFrac}{a fraction of subjects randomized to the group considered in the hazard ratio's numerator}
 }
 \value{
-A numeric vector (of the same length as \code{alpha} and \code{nEvents}) of hazard ratio estimates.
+A data frame (with rows corresponding to the components of \code{alpha} and \code{nEvents}) of point estimates of the hazard ratio at the stopping boundary and the pertaining monitoring-adjusted \eqn{(1 - \alpha^{\ast}) \times 100\%} confidence intervals, where \eqn{\alpha^{\ast}} is the overall two-sided type 1 error rate.
 }
 \description{
 Assuming an exponential survival model, hazard ratios are estimated at an efficacy or non-efficacy stopping boundary, defined using the Wald CI approach, at each group-sequential analysis in an event-driven 2-arm trial design.
@@ -27,7 +27,7 @@ Assuming an exponential survival model, hazard ratios are estimated at an effica
 Using an exponential survival model and sample estimates \eqn{\widehat{\lambda}_1} and \eqn{\widehat{\lambda}_2} of the group-specific hazard rates, the asymptotic variance of the log hazard ratio estimator 
 \eqn{\log \widehat{\theta} = \log (\widehat{\lambda}_1 / \widehat{\lambda}_2)} is employed together with the approximation \eqn{E\{\delta | \lambda_1\} = (\widehat{\lambda}_1 / \widehat{\lambda}_2)\, E\{\delta | \lambda_2\}}.
 The resultant variance approximation is \eqn{\mathrm{var} \{\log \widehat{\theta}\} = (1/D) \{ 2 + p \, \widehat{\theta} / (1 - p) + (1 - p) / (p \, \widehat{\theta}) \}},
-where \eqn{D} is the total number of events and \eqn{p} is the randomization fraction \code{randFrac}.
+where \eqn{D} is the arm-pooled number of events \code{nEvents} and \eqn{p} is the randomization fraction \code{randFrac}.
 }
 \examples{
 ## O'Brien-Fleming test of H0: HR >= 0.7 (for efficacy) at 
