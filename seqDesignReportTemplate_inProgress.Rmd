@@ -36,7 +36,7 @@ library(ldbounds)
 if (Sys.getenv("USERNAME")=="mjuraska"){
   source("h:/SCHARP/seqDesign/code/source_seqDesign.R")
 } else {
-  source("C:/Users/brian/OneDrive/Documents/R/source_seqDesign.R")  
+  source("C:/Users/brian/Documents/R/source_seqDesign.R")  
 }
 ```
 
@@ -363,7 +363,7 @@ print(xtable(res1,
 
 ```{r label=plotOutcomeProbs, results='asis', fig.width=10, fig.asp=0.7, out.width='95%', fig.cap=paste0("Probabilities of reaching each possible trial monitoring outcome", ifelse(!is.null(effNullVE), paste0(", and unconditional powers to reject $H_0$: $VE \\leq ", effNullVE * 100, "\\%$ in the FAS and PP cohorts counting only FAS-15d+ and PP-15d+ endpoints, respectively,"),""), " for a 2-arm study design with ", N.pla, " placebo and ", N.vax, " vaccine recipients")}
 res <- subset(res, aveHR<=1)
-  
+
 par(mar=c(4.5,5,3,1.5), las=1, cex.axis=1.2, cex.lab=1.3, cex.main=1.2)
 plot(-1, 0, xlim=c(0, max(aveVE.vector)), ylim=0:1, xaxt="n", yaxt="n", xlab=bquote(paste(bar(VE), "(2-32)")), ylab="Probability")
 axis(side=1, at=seq(0, max(aveVE.vector), by=0.1), labels=paste0(seq(0, max(aveVE.vector) * 100, by=10),"%"))
@@ -379,14 +379,22 @@ if (!is.null(effNullVE)){
 }  
 with(res, lines(1-aveHR, powerPP/100, type="b", lwd=3.5, lty="longdash", col="magenta3"))
   
-with(res, text(1-aveHR[aveHR==0.8], noneffInterim[aveHR==0.8] / 100, "Non-efficacy\nat interim analysis", cex=1.2, adj=c(1.2, 0.8)))
-with(res, text(1-aveHR[aveHR==1], harm[aveHR==1] / 100, "Potential harm", adj=c(-0.1, -0.1), cex=1.2))
+position <- ifelse(res$noneffInterim[res$aveHR == 0.9] > res$noneffInterim[res$aveHR == 0.8] & res$noneffInterim[res$aveHR == 1.0] > res$noneffInterim[res$aveHR == 0.8], c(1.2, 1.2), c(-0.1, 0.4))
+
+with(res, text(1-aveHR[aveHR==0.8], noneffInterim[aveHR==0.8] / 100, "Non-efficacy\n at interim analysis", cex=1.2, adj=position))
+
+with(res, text(1-aveHR[aveHR==1], max(harm[aveHR==1] / 100, 0.055), "Potential harm", adj=c(-0.1, -0.1), cex=1.2))
+
 #with(res, text(1-aveHR[aveHR==0.4], higheff[aveHR==0.4] / 100, "High efficacy", adj=c(-0.1, 0.5), cex=1.2))
 #with(res, text(1-aveHR[aveHR==0.5], powerPP[aveHR==0.5] / 100, "FAS-15d+\nunconditional power\n[VE>20%]", cex=1.2, adj=c(0.95, -0.4)))
 #with(res, text(1-aveHR[aveHR==0.4], design1[aveHR==0.4] / 100, "PP\nunconditional power\n[VE>20%]", cex=1.2, adj=c(0, 1.3)))
 #text(0.45, 0.6, "ITT unconditional power\n[VE(0-6)>25%]", cex=1.1, pos=4)
-legend(0.55, 0.8, lty=c("solid", "longdash"), lwd=3.5, col=c("black", "magenta3"), title=paste0("Unconditional Power\n[VE < ", effNullVE * 100, "%]"), legend=c("FAS (FAS-15d+ endpoints)", "PP (PP-15d+ endpoints)"), cex=1.2, bty="n")
-text(0.6, 0.25, 
+
+position <- min(res$powerPP[res$aveHR<0.5], res[res$aveHR<0.5, grep('design', names(res))], 90)/100
+
+legend(0.55, position - 0.09, lty=c("solid", "longdash"), lwd=3.5, col=c("black", "magenta3"), title=paste0("Unconditional Power\n[VE < ", effNullVE * 100, "%]"), legend=c("FAS (FAS-15d+ endpoints)", "PP (PP-15d+ endpoints)"), cex=1.2, bty="n")
+
+text(0.6, max(res$harm[res$aveHR<0.5]/100, res$noneffInterim[res$aveHR<0.5]/100, 0.05) + 0.15,
      paste0(
        "N=",N.pla,":",N.vax," pla:vax\n3-month uniform accrual\n",format(infRate*100, digits=2, nsmall=2),"% annual pla incidence\n2% annual dropout\nCox model O'Brien-Fleming eff\n    monitoring (FAS-15d+ endpoints)\n",ifelse(estimand=="combined","Cox & cum inc-based ",ifelse(estimand=="cuminc","Cum inc ","Cox model ")), "FKG non-eff\n    monitoring (PP-15d+ endpoints)\n", ifelse(estimand=="cox","Cox model uncond power","Cum inc uncond power")), cex=1, pos=4)
 ```
