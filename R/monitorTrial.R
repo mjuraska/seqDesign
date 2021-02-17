@@ -333,14 +333,6 @@ monitorTrial <- function (dataFile,
                                             estimand="cox", lagTime=NULL, cohortInd=NULL,
                                             nominalAlphas=NULL),
 
-                          # stage1Eff is used to perform a test of efficacy at the end of
-                          # stage 1 follow-up only.  It is intended for use in designs that
-                          # are NOT event driven. 
-                          stage1Eff = list(
-                              cohort = list(lagTime=0, cohortInd=NULL),
-                              nullVE = NULL, nominalAlpha = NULL,
-                              estimand = "cox" 
-                          ),
 
                           ## lowerVEnoneff is not required.  Specify only if you want this
                           ## condition as part of your monitoring.
@@ -429,16 +421,6 @@ monitorTrial <- function (dataFile,
   if (is.null(alphaAltVE) && !is.null(altVE)) {
       alphaAltVE <- ifelse(!is.null(alphaUncPower), alphaUncPower, alphaStage1)
   }
-
-  ## --- New code to process efficacy arguments ---
-
-  ## create indicator var.s telling us whether 'effCohort' and 'stage1Eff' have
-  ## been specified
-  effCoh  <- ifelse( is.missing(effCohort) || is.null(effCohort$times), FALSE, TRUE)
-  stg1Eff <- ifelse( is.missing(stage1Eff) || is.null(stage1Eff$nullVE),FALSE, TRUE) 
-
-  if (!effCoh && !stg1Eff)
-      stop("Either 'effCohort' or 'stage1Eff' must be specified in monitorTrial()\n")
 
 
 
