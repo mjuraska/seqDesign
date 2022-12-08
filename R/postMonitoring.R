@@ -811,8 +811,13 @@ crossBoundCumProb <- function(boundType=c("eff", "nonEff"), nAnalyses, monitorTr
   
   if (is.character(monitorTrialFile)){
     if (is.character(monitorTrialDir)){
-      # load an RData file (a list named 'out')
-      load(file.path(monitorTrialDir, monitorTrialFile))  
+      if (file.exists(file.path(monitorTrialDir, monitorTrialFile))){
+        # load an RData file (a list named 'out')
+        load(file.path(monitorTrialDir, monitorTrialFile))    
+      } else {
+        stop("The file\n", file.path(monitorTrialDir, monitorTrialFile), "\ndoes not exist.")
+      }
+      
     } else {
       # load an RData file (a list named 'out')
       load(monitorTrialFile)  

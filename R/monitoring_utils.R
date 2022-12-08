@@ -225,10 +225,22 @@ pNS <- function(Bounds, p=.5, returnPns=FALSE)
 {
   N <- length(Bounds)
 
-  if ( all(is.na(Bounds)) )
-    stop("The vector provided for argument 'Bounds' contains only NAs.\n",
-         "Exiting...\n\n")
-
+  ## 08Dec2022 Doug Grove - Modified so that if all elements of vector 'Bounds'
+  ##   are NA, then throw a warning (rather than an error) and return an object
+  ## immediately.  This is being done as there are cases where we're trying to
+  ## circumvent harm monitoring in which this happens.  
+  if ( all(is.na(Bounds)) ){
+    warning("The vector provided for argument 'Bounds' contains only NAs.\n",
+            "This may be expected if, e.g., one is trying to circumvent harm monitoring.\n",
+            "Otherwise, you should investigate.\n\n")
+    return( list(
+      totalStopProb = 0,
+      Stop = numeric(N),
+      Bounds  = data.frame(n=1:N, StoppingBound=Bounds),
+      N = N,
+      p = p ))
+  }
+  
   if ( any(Bounds > (1:N), na.rm=TRUE) )
       stop("The bounds provided do not appear to correspond to the infection",
            " totals (1,2,...,N).\n", "One of more of the bounds are larger",
